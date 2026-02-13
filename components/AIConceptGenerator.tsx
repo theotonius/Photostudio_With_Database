@@ -19,20 +19,22 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
     setLoading(true);
     setError(null);
     try {
-      // API Key সংগ্রহ করা হচ্ছে index.html-এর shim থেকে
-      const apiKey = process.env.API_KEY;
+      /**
+       * এখানে আপনি সরাসরি আপনার এপিআই কি বসাতে পারেন।
+       * উদাহরণ: const apiKey = 'AIzaSyA...';
+       */
+      const apiKey = process.env.API_KEY || 'YOUR_GEMINI_API_KEY_HERE';
       
-      if (!apiKey || apiKey === 'YOUR_API_KEY_HERE' || apiKey === '') {
-        throw new Error("Gemini API Key পাওয়া যায়নি। দয়া করে index.html ফাইলের window.process.env অংশে আপনার Key-টি বসান।");
+      if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey === '') {
+        throw new Error("Gemini API Key পাওয়া যায়নি। দয়া করে index.html অথবা এই ফাইলে সরাসরি Key-টি বসান।");
       }
 
       const ai = new GoogleGenAI({ apiKey });
       const prompt = `Create a creative photography shoot concept and shot list for a client named ${client.name} for their ${client.eventType} event on ${client.eventDate}. 
       Details: ${client.notes || 'Standard shoot'}. 
       Package: ${client.package}. 
-      Please provide a theme name, lighting suggestions, and a 10-point shot list. Be professional and creative. Output in a clear format.`;
+      Please provide a theme name, lighting suggestions, and a 10-point shot list in a clear, structured format.`;
 
-      // Gemini 3 Flash ব্যবহার করা হচ্ছে দ্রুত এবং ভালো রেজাল্টের জন্য
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
@@ -41,11 +43,11 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
       if (response && response.text) {
         setConcept(response.text);
       } else {
-        throw new Error("AI থেকে কোনো উত্তর পাওয়া যায়নি। পুনরায় চেষ্টা করুন।");
+        throw new Error("AI থেকে কোনো উত্তর পাওয়া যায়নি।");
       }
     } catch (err: any) {
       console.error('Gemini API Error:', err);
-      setError(err.message || 'একটি ত্রুটি ঘটেছে। এপিআই কি এবং ইন্টারনেট কানেকশন চেক করুন।');
+      setError(err.message || 'একটি ত্রুটি ঘটেছে। এপিআই কি চেক করুন।');
     } finally {
       setLoading(false);
     }
@@ -85,10 +87,10 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
               <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto text-indigo-600">
                 <Sparkles size={40} />
               </div>
-              <div>
-                <h4 className="text-xl font-bold text-slate-800">শুট কনসেপ্ট জেনারেট করুন</h4>
-                <p className="text-slate-500 max-w-sm mx-auto mt-2">
-                  Gemini AI ব্যবহার করে ${client.name}-এর ${client.eventType}-এর জন্য একটি প্রফেশনাল প্ল্যান তৈরি করুন।
+              <div className="space-y-2">
+                <h4 className="text-xl font-bold text-slate-800">শুট আইডিয়া তৈরি করুন</h4>
+                <p className="text-slate-500 max-w-sm mx-auto text-sm">
+                  ${client.name}-এর ${client.eventType}-এর জন্য কৃত্রিম বুদ্ধিমত্তা দিয়ে একটি প্রফেশনাল প্ল্যান তৈরি করুন।
                 </p>
               </div>
               <button 
@@ -97,23 +99,23 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
                 className="inline-flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                {loading ? 'প্রক্রিয়াধীন...' : 'প্ল্যান তৈরি করুন'}
+                {loading ? 'প্রসেসিং হচ্ছে...' : 'প্ল্যান জেনারেট করুন'}
               </button>
             </div>
           ) : (
             <div className="space-y-4 animate-in fade-in duration-500">
               <div className="flex items-center justify-between">
-                <h4 className="font-bold text-slate-800">আপনার কাস্টম শুট প্ল্যান</h4>
+                <h4 className="font-bold text-slate-800">কাস্টম শুট প্ল্যান</h4>
                 <button 
                   onClick={copyToClipboard}
                   className="flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? 'কপি হয়েছে' : 'টেক্সট কপি করুন'}
+                  {copied ? 'কপি হয়েছে' : 'কপি করুন'}
                 </button>
               </div>
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 prose prose-slate max-w-none">
-                <div className="whitespace-pre-wrap text-slate-700 font-medium leading-relaxed">
+                <div className="whitespace-pre-wrap text-slate-700 font-medium leading-relaxed text-sm">
                   {concept}
                 </div>
               </div>
@@ -121,7 +123,7 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
                 onClick={() => setConcept(null)}
                 className="w-full py-3 text-slate-500 font-semibold hover:bg-slate-50 rounded-xl transition-colors"
               >
-                পুনরায় নতুন আইডিয়া খুঁজুন
+                আবার চেষ্টা করুন
               </button>
             </div>
           )}

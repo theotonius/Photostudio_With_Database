@@ -8,13 +8,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      /**
-       * এখানে আপনার Gemini API Key বসান।
-       * অ্যাপটি 'process.env.API_KEY' ব্যবহার করে এখান থেকেই কি (Key) সংগ্রহ করবে।
-       */
+      // ব্রাউজারে process.env অবজেক্টটি সিমুলেট করা হচ্ছে
       window.process = {
         env: {
-          API_KEY: 'YOUR_API_KEY_HERE' 
+          API_KEY: 'YOUR_GEMINI_API_KEY_HERE' // এখানে আপনার এপিআই কি দিন
         }
       };
     </script>
@@ -25,63 +22,34 @@
             print-color-adjust: exact;
         }
         @media print {
-            @page {
-                size: A4;
-                margin: 0;
-            }
-            html, body {
-                height: 100%;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white !important;
-            }
-            .no-print {
-                display: none !important;
-            }
-            .print-only {
-                display: block !important;
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                background: white;
-                z-index: 99999;
-                padding: 40px !important;
-            }
+            @page { size: A4; margin: 0; }
+            html, body { height: 100%; margin: 0 !important; padding: 0 !important; background: white !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 99999; padding: 40px !important; }
         }
-        .print-only {
-            display: none;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #cbd5e1;
-        }
+        .print-only { display: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
     </style>
-<script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react-dom": "https://esm.sh/react-dom@^19.2.4",
+    "react-dom/client": "https://esm.sh/react-dom@^19.2.4/client",
     "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-    <!-- নিচের এই লাইনটি অ্যাপটি সচল করার জন্য অত্যন্ত গুরুত্বপূর্ণ -->
+    <!-- WAMP এ সরাসরি চালানোর জন্য আপনার ফাইলগুলো অবশ্যই সঠিক পাথে থাকতে হবে -->
     <script type="module" src="index.tsx"></script>
 </body>
 </html>
