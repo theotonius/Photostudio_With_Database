@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw, AlertCircle, Info, Contact as ContactIcon } from 'lucide-react';
+import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw, AlertCircle, Info, Contact as ContactIcon, Cloud } from 'lucide-react';
 import { Client, ShootStatus, DashboardStats, StudioProfile, Contact } from './types.ts';
 import ClientModal from './components/ClientModal.tsx';
 import DashboardCards from './components/DashboardCards.tsx';
@@ -13,6 +13,9 @@ import ClientDetailModal from './components/ClientDetailModal.tsx';
 import CalendarTab from './components/CalendarTab.tsx';
 import ContactTable from './components/ContactTable.tsx';
 import ContactModal from './components/ContactModal.tsx';
+
+// Import Firebase (assuming the user will fill config in firebase.ts)
+import { db, collection, getDocs, setDoc, doc, deleteDoc, query, orderBy } from './firebase.ts';
 
 const DEFAULT_STUDIO: StudioProfile = {
   name: 'Modern Photo Studio',
@@ -37,17 +40,19 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [studioProfile, setStudioProfile] = useState<StudioProfile>(DEFAULT_STUDIO);
+  
+  // Storage Mode Selection
+  const [storageMode, setStorageMode] = useState<'local' | 'sql' | 'firebase'>(() => {
+    return (localStorage.getItem('studio_storage_mode') as any) || 'local';
+  });
+
   const [isOffline, setIsOffline] = useState(currentUser?.mode === 'demo');
   const [searchTerm, setSearchTerm] = useState('');
-  
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'calendar' | 'contacts' | 'maintenance'>('dashboard');
-  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-
   const [isPrinting, setIsPrinting] = useState(false);
   const [printClient, setPrintClient] = useState<Client | null>(null);
   const [isAIOpen, setIsAIOpen] = useState(false);
@@ -55,8 +60,32 @@ const App: React.FC = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
+  const fetchFromFirebase = async () => {
+    try {
+      const clientsSnap = await getDocs(query(collection(db, "clients"), orderBy("createdAt", "desc")));
+      const clientsData = clientsSnap.docs.map(doc => ({ ...doc.data() as Client, id: doc.id }));
+      setClients(clientsData);
+
+      const contactsSnap = await getDocs(query(collection(db, "contacts"), orderBy("name", "asc")));
+      const contactsData = contactsSnap.docs.map(doc => ({ ...doc.data() as Contact, id: doc.id }));
+      setContacts(contactsData);
+
+      const settingsSnap = await getDocs(collection(db, "settings"));
+      if (!settingsSnap.empty) {
+        setStudioProfile(settingsSnap.docs[0].data() as StudioProfile);
+      }
+    } catch (error) {
+      console.error("Firebase fetch error:", error);
+      setIsOffline(true);
+    }
+  };
+
   const fetchFromDatabase = async () => {
-    if (currentUser?.mode === 'demo' || isOffline) {
+    if (storageMode === 'firebase') {
+      return fetchFromFirebase();
+    }
+
+    if (currentUser?.mode === 'demo' || isOffline || storageMode === 'local') {
       const savedClients = localStorage.getItem('photo_studio_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
       const savedContacts = localStorage.getItem('photo_studio_contacts');
@@ -92,7 +121,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated) fetchFromDatabase();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, storageMode]);
 
   const stats = useMemo<DashboardStats>(() => {
     return {
@@ -118,51 +147,69 @@ const App: React.FC = () => {
   }, [contacts, searchTerm]);
 
   const handleSaveClient = async (clientData: any) => {
+    const id = editingClient ? editingClient.id : Math.random().toString(36).substr(2, 9);
+    const createdAt = editingClient ? editingClient.createdAt : new Date().toISOString();
+    const finalClient = { ...clientData, id, createdAt };
+
+    // Update Local State
     let updatedClients;
     if (editingClient) {
-      updatedClients = clients.map(c => c.id === editingClient.id ? { ...c, ...clientData } : c);
+      updatedClients = clients.map(c => c.id === id ? finalClient : c);
     } else {
-      const newClient = { ...clientData, id: Math.random().toString(36).substr(2, 9), createdAt: new Date().toISOString() };
-      updatedClients = [...clients, newClient];
+      updatedClients = [...clients, finalClient];
     }
     setClients(updatedClients);
     localStorage.setItem('photo_studio_clients', JSON.stringify(updatedClients));
 
-    if (!isOffline && currentUser?.mode !== 'demo') {
+    // Firebase Sync
+    if (storageMode === 'firebase') {
       try {
-        const syncData = editingClient ? { ...editingClient, ...clientData } : updatedClients[updatedClients.length - 1];
+        await setDoc(doc(db, "clients", id), finalClient);
+      } catch (e) { console.error("Firebase save error:", e); }
+    } 
+    // SQL Sync
+    else if (storageMode === 'sql' && !isOffline) {
+      try {
         await fetch('api.php?type=clients', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(syncData)
+          body: JSON.stringify(finalClient)
         });
       } catch (e) { console.error(e); }
     }
+
     setIsModalOpen(false);
     setEditingClient(null);
   };
 
   const handleSaveContact = async (contactData: any) => {
+    const id = editingContact ? editingContact.id : Math.random().toString(36).substr(2, 9);
+    const createdAt = editingContact ? editingContact.createdAt : new Date().toISOString();
+    const finalContact = { ...contactData, id, createdAt };
+
     let updatedContacts;
     if (editingContact) {
-      updatedContacts = contacts.map(c => c.id === editingContact.id ? { ...c, ...contactData } : c);
+      updatedContacts = contacts.map(c => c.id === id ? finalContact : c);
     } else {
-      const newContact = { ...contactData, id: Math.random().toString(36).substr(2, 9), createdAt: new Date().toISOString() };
-      updatedContacts = [...contacts, newContact];
+      updatedContacts = [...contacts, finalContact];
     }
     setContacts(updatedContacts);
     localStorage.setItem('photo_studio_contacts', JSON.stringify(updatedContacts));
 
-    if (!isOffline && currentUser?.mode !== 'demo') {
+    if (storageMode === 'firebase') {
       try {
-        const syncData = editingContact ? { ...editingContact, ...contactData } : updatedContacts[updatedContacts.length - 1];
+        await setDoc(doc(db, "contacts", id), finalContact);
+      } catch (e) { console.error(e); }
+    } else if (storageMode === 'sql' && !isOffline) {
+      try {
         await fetch('api.php?type=contacts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(syncData)
+          body: JSON.stringify(finalContact)
         });
       } catch (e) { console.error(e); }
     }
+
     setIsContactModalOpen(false);
     setEditingContact(null);
   };
@@ -172,7 +219,12 @@ const App: React.FC = () => {
       const updated = clients.filter(c => c.id !== id);
       setClients(updated);
       localStorage.setItem('photo_studio_clients', JSON.stringify(updated));
-      if (!isOffline) await fetch(`api.php?type=clients&id=${id}`, { method: 'DELETE' });
+      
+      if (storageMode === 'firebase') {
+        await deleteDoc(doc(db, "clients", id));
+      } else if (storageMode === 'sql' && !isOffline) {
+        await fetch(`api.php?type=clients&id=${id}`, { method: 'DELETE' });
+      }
     }
   };
 
@@ -181,7 +233,12 @@ const App: React.FC = () => {
       const updated = contacts.filter(c => c.id !== id);
       setContacts(updated);
       localStorage.setItem('photo_studio_contacts', JSON.stringify(updated));
-      if (!isOffline) await fetch(`api.php?type=contacts&id=${id}`, { method: 'DELETE' });
+      
+      if (storageMode === 'firebase') {
+        await deleteDoc(doc(db, "contacts", id));
+      } else if (storageMode === 'sql' && !isOffline) {
+        await fetch(`api.php?type=contacts&id=${id}`, { method: 'DELETE' });
+      }
     }
   };
 
@@ -246,7 +303,11 @@ const App: React.FC = () => {
         <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 no-print shrink-0">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-black text-slate-800 capitalize">{activeTab}</h2>
-            {isOffline && <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><WifiOff size={12}/> Offline Mode</span>}
+            <div className="flex gap-2">
+              {storageMode === 'firebase' && <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Cloud size={12}/> Firebase Cloud</span>}
+              {storageMode === 'sql' && <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Database size={12}/> SQL Server</span>}
+              {isOffline && <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><WifiOff size={12}/> Offline Mode</span>}
+            </div>
           </div>
           
           <div className="flex items-center gap-4 w-96">
@@ -298,7 +359,7 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'calendar' && <CalendarTab clients={clients} onViewClient={(c) => {setSelectedClient(c); setIsDetailOpen(true);}} />}
-          {activeTab === 'maintenance' && <Maintenance clients={clients} contacts={contacts} onImport={(c) => setClients(c)} studioProfile={studioProfile} onUpdateProfile={setStudioProfile} />}
+          {activeTab === 'maintenance' && <Maintenance clients={clients} contacts={contacts} onImport={(c) => setClients(c)} studioProfile={studioProfile} onUpdateProfile={setStudioProfile} storageMode={storageMode} onStorageModeChange={setStorageMode} />}
         </div>
       </main>
 

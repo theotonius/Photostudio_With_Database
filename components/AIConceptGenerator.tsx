@@ -19,14 +19,8 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
     setLoading(true);
     setError(null);
     try {
-      // Get key from window shim or process
-      const apiKey = (window as any).process?.env?.API_KEY;
-      
-      if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey === '') {
-        throw new Error("Gemini API Key পাওয়া যায়নি। দয়া করে index.html ফাইলে আপনার Key-টি বসান।");
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      /* Initializing GoogleGenAI using process.env.API_KEY as per the world-class guidelines */
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Photography Studio Assistant: Create a creative shoot concept for a client.
       Client Name: ${client.name}
       Event: ${client.eventType}
@@ -40,11 +34,13 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
       
       Format the output beautifully and professionally.`;
 
+      /* Querying the model with the recommended gemini-3-flash-preview for text tasks */
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
 
+      /* Extracting text content directly via the .text property from GenerateContentResponse */
       if (response && response.text) {
         setConcept(response.text);
       } else {
@@ -52,7 +48,7 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
       }
     } catch (err: any) {
       console.error('Gemini Error:', err);
-      setError(err.message || 'Error communicating with AI. Check your internet and API Key.');
+      setError(err.message || 'Error communicating with AI. Check your internet connection.');
     } finally {
       setLoading(false);
     }

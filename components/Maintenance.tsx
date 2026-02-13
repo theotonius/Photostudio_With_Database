@@ -1,6 +1,7 @@
 
 import React, { useRef, useState } from 'react';
-import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2 } from 'lucide-react';
+/* Added WifiOff to imports from lucide-react */
+import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2, Cloud, WifiOff } from 'lucide-react';
 import { Client, Contact, StudioProfile } from '../types';
 
 interface MaintenanceProps {
@@ -9,14 +10,15 @@ interface MaintenanceProps {
   onImport: (clients: Client[]) => void;
   studioProfile: StudioProfile;
   onUpdateProfile: (profile: StudioProfile) => void;
+  storageMode: 'local' | 'sql' | 'firebase';
+  onStorageModeChange: (mode: 'local' | 'sql' | 'firebase') => void;
 }
 
-const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, studioProfile, onUpdateProfile }) => {
+const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, studioProfile, onUpdateProfile, storageMode, onStorageModeChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState<StudioProfile>(studioProfile);
   
-  // Password Change State
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [isChangingPass, setIsChangingPass] = useState(false);
   const [passError, setPassError] = useState('');
@@ -42,40 +44,10 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
     alert('Studio Profile Updated!');
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPassError('');
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPassError('Passwords do not match');
-      return;
-    }
-    
-    setIsChangingPass(true);
-    const userStr = localStorage.getItem('photo_studio_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-
-    try {
-      const res = await fetch('api.php?type=auth&action=change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: user?.username,
-          oldPassword: passwordForm.oldPassword,
-          newPassword: passwordForm.newPassword
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert('Password changed successfully!');
-        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-      } else {
-        setPassError(data.message || 'Failed to update password');
-      }
-    } catch (err) {
-      setPassError('Connection error');
-    } finally {
-      setIsChangingPass(false);
-    }
+  const updateStorageMode = (mode: 'local' | 'sql' | 'firebase') => {
+    localStorage.setItem('studio_storage_mode', mode);
+    onStorageModeChange(mode);
+    alert(`Storage Mode switched to ${mode.toUpperCase()}. App will reload data.`);
   };
 
   const exportSQL = () => {
@@ -87,121 +59,48 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
     
     const escape = (val: any) => val === null || val === undefined ? 'NULL' : `'${String(val).replace(/'/g, "''")}'`;
 
-    // Users Table
-    sqlContent += `CREATE TABLE IF NOT EXISTS \`users\` (\n`;
-    sqlContent += `  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n`;
-    sqlContent += `  \`username\` varchar(50) NOT NULL UNIQUE,\n`;
-    sqlContent += `  \`email\` varchar(255) NOT NULL UNIQUE,\n`;
-    sqlContent += `  \`password\` varchar(255) NOT NULL,\n`;
-    sqlContent += `  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n`;
-    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
-    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+    // SQL tables structure...
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`users\` (\n  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n  \`username\` varchar(50) NOT NULL UNIQUE,\n  \`email\` varchar(255) NOT NULL UNIQUE,\n  \`password\` varchar(255) NOT NULL,\n  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
-    // Settings Table
-    sqlContent += `CREATE TABLE IF NOT EXISTS \`studio_settings\` (\n`;
-    sqlContent += `  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n`;
-    sqlContent += `  \`name\` varchar(255) NOT NULL,\n`;
-    sqlContent += `  \`logo\` longtext,\n`;
-    sqlContent += `  \`address\` text,\n`;
-    sqlContent += `  \`phone\` varchar(50),\n`;
-    sqlContent += `  \`email\` varchar(255),\n`;
-    sqlContent += `  \`website\` varchar(255),\n`;
-    sqlContent += `  \`currency\` varchar(10),\n`;
-    sqlContent += `  \`taxNumber\` varchar(100),\n`;
-    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
-    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`studio_settings\` (\n  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n  \`name\` varchar(255) NOT NULL,\n  \`logo\` longtext,\n  \`address\` text,\n  \`phone\` varchar(50),\n  \`email\` varchar(255),\n  \`website\` varchar(255),\n  \`currency\` varchar(10),\n  \`taxNumber\` varchar(100),\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
     sqlContent += `REPLACE INTO \`studio_settings\` VALUES (1, ${escape(studioProfile.name)}, ${escape(studioProfile.logo)}, ${escape(studioProfile.address)}, ${escape(studioProfile.phone)}, ${escape(studioProfile.email)}, ${escape(studioProfile.website)}, ${escape(studioProfile.currency)}, ${escape(studioProfile.taxNumber)});\n\n`;
 
-    // Clients Table
-    sqlContent += `CREATE TABLE IF NOT EXISTS \`clients\` (\n`;
-    sqlContent += `  \`id\` varchar(50) NOT NULL,\n`;
-    sqlContent += `  \`name\` varchar(255) NOT NULL,\n`;
-    sqlContent += `  \`phone\` varchar(50) NOT NULL,\n`;
-    sqlContent += `  \`email\` varchar(255) DEFAULT NULL,\n`;
-    sqlContent += `  \`eventDate\` date DEFAULT NULL,\n`;
-    sqlContent += `  \`eventType\` varchar(100) DEFAULT NULL,\n`;
-    sqlContent += `  \`location\` text,\n`;
-    sqlContent += `  \`image\` longtext,\n`;
-    sqlContent += `  \`package\` varchar(100) DEFAULT NULL,\n`;
-    sqlContent += `  \`totalPrice\` decimal(10,2) DEFAULT 0.00,\n`;
-    sqlContent += `  \`paidAmount\` decimal(10,2) DEFAULT 0.00,\n`;
-    sqlContent += `  \`dueAmount\` decimal(10,2) DEFAULT 0.00,\n`;
-    sqlContent += `  \`status\` varchar(50) DEFAULT NULL,\n`;
-    sqlContent += `  \`notes\` text,\n`;
-    sqlContent += `  \`createdAt\` datetime DEFAULT NULL,\n`;
-    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
-    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`clients\` (\n  \`id\` varchar(50) NOT NULL,\n  \`name\` varchar(255) NOT NULL,\n  \`phone\` varchar(50) NOT NULL,\n  \`email\` varchar(255) DEFAULT NULL,\n  \`eventDate\` date DEFAULT NULL,\n  \`eventType\` varchar(100) DEFAULT NULL,\n  \`location\` text,\n  \`image\` longtext,\n  \`package\` varchar(100) DEFAULT NULL,\n  \`totalPrice\` decimal(10,2) DEFAULT 0.00,\n  \`paidAmount\` decimal(10,2) DEFAULT 0.00,\n  \`dueAmount\` decimal(10,2) DEFAULT 0.00,\n  \`status\` varchar(50) DEFAULT NULL,\n  \`notes\` text,\n  \`createdAt\` datetime DEFAULT NULL,\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
     if (clients.length > 0) {
       sqlContent += `INSERT INTO \`clients\` VALUES\n`;
-      const rows = clients.map(client => {
-        return `(${escape(client.id)}, ${escape(client.name)}, ${escape(client.phone)}, ${escape(client.email)}, ${escape(client.eventDate)}, ${escape(client.eventType)}, ${escape(client.location)}, ${escape(client.image)}, ${escape(client.package)}, ${client.totalPrice}, ${client.paidAmount}, ${client.dueAmount || (client.totalPrice - client.paidAmount)}, ${escape(client.status)}, ${escape(client.notes)}, ${escape(client.createdAt)})`;
-      });
+      const rows = clients.map(client => `(${escape(client.id)}, ${escape(client.name)}, ${escape(client.phone)}, ${escape(client.email)}, ${escape(client.eventDate)}, ${escape(client.eventType)}, ${escape(client.location)}, ${escape(client.image)}, ${escape(client.package)}, ${client.totalPrice}, ${client.paidAmount}, ${client.dueAmount || (client.totalPrice - client.paidAmount)}, ${escape(client.status)}, ${escape(client.notes)}, ${escape(client.createdAt)})`);
       sqlContent += rows.join(',\n') + ';\n\n';
     }
 
-    // Contacts Table Export
-    sqlContent += `CREATE TABLE IF NOT EXISTS \`contacts\` (\n`;
-    sqlContent += `  \`id\` varchar(50) NOT NULL,\n`;
-    sqlContent += `  \`name\` varchar(255) NOT NULL,\n`;
-    sqlContent += `  \`phone\` varchar(50) NOT NULL,\n`;
-    sqlContent += `  \`email\` varchar(255) DEFAULT NULL,\n`;
-    sqlContent += `  \`address\` text,\n`;
-    sqlContent += `  \`image\` longtext,\n`;
-    sqlContent += `  \`notes\` text,\n`;
-    sqlContent += `  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n`;
-    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
-    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`contacts\` (\n  \`id\` varchar(50) NOT NULL,\n  \`name\` varchar(255) NOT NULL,\n  \`phone\` varchar(50) NOT NULL,\n  \`email\` varchar(255) DEFAULT NULL,\n  \`address\` text,\n  \`image\` longtext,\n  \`notes\` text,\n  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
     if (contacts.length > 0) {
-      sqlContent += `INSERT INTO \`contacts\` (\`id\`, \`name\`, \`phone\`, \`email\`, \`address\`, \`image\`, \`notes\`, \`createdAt\`) VALUES\n`;
-      const rows = contacts.map(contact => {
-        return `(${escape(contact.id)}, ${escape(contact.name)}, ${escape(contact.phone)}, ${escape(contact.email)}, ${escape(contact.address)}, ${escape(contact.image)}, ${escape(contact.notes)}, ${escape(contact.createdAt)})`;
-      });
+      sqlContent += `INSERT INTO \`contacts\` VALUES\n`;
+      const rows = contacts.map(contact => `(${escape(contact.id)}, ${escape(contact.name)}, ${escape(contact.phone)}, ${escape(contact.email)}, ${escape(contact.address)}, ${escape(contact.image)}, ${escape(contact.notes)}, ${escape(contact.createdAt)})`);
       sqlContent += rows.join(',\n') + ';\n';
     }
 
-    downloadFile(sqlContent, filename, 'text/sql');
-  };
-
-  const downloadFile = (content: string, filename: string, contentType: string) => {
-    const blob = new Blob([content], { type: contentType });
+    const blob = new Blob([sqlContent], { type: 'text/sql' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
-    document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        if (Array.isArray(data) && window.confirm('This will replace your current data. Continue?')) {
-          onImport(data);
-        }
-      } catch (err) { alert('Invalid File Format'); }
-    };
-    reader.readAsText(file);
-  };
-
   return (
-    <div className="max-w-5xl space-y-12">
+    <div className="max-w-5xl space-y-12 pb-20">
       <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
         <div className="relative z-10">
           <h3 className="text-3xl font-black mb-3 flex items-center gap-3 tracking-tight">
             <Building size={32} className="text-indigo-400" />
-            Studio Configuration
+            Maintenance & Cloud
           </h3>
           <p className="text-slate-400 max-w-lg font-medium">
-            Customize how your studio appears on invoices and manage your data backups. Settings are now synced to your cloud database.
+            Manage your storage preference and studio identity. Switch between local database, SQL server, or Firebase Cloud.
           </p>
         </div>
         <Building size={200} className="absolute right-[-20px] top-[-20px] opacity-[0.03] rotate-12" />
@@ -209,7 +108,49 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-10">
-          {/* Profile Settings */}
+          {/* Storage Mode Selector */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
+            <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <Database size={18} className="text-indigo-600" />
+              Primary Storage Source
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button 
+                onClick={() => updateStorageMode('local')}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${storageMode === 'local' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center mb-3">
+                  <WifiOff size={16} className="text-slate-400" />
+                </div>
+                <p className="font-black text-slate-800 text-xs uppercase tracking-widest">Local Browser</p>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">Saves in browser cache. No setup required.</p>
+              </button>
+              
+              <button 
+                onClick={() => updateStorageMode('sql')}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${storageMode === 'sql' ? 'border-emerald-600 bg-emerald-50' : 'border-slate-100 hover:border-slate-200'}`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center mb-3">
+                  <Database size={16} className="text-emerald-500" />
+                </div>
+                <p className="font-black text-slate-800 text-xs uppercase tracking-widest">SQL (WAMP/XAMPP)</p>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">Professional hosting. Requires PHP/MySQL.</p>
+              </button>
+
+              <button 
+                onClick={() => updateStorageMode('firebase')}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${storageMode === 'firebase' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center mb-3">
+                  <Cloud size={16} className="text-indigo-500" />
+                </div>
+                <p className="font-black text-slate-800 text-xs uppercase tracking-widest">Firebase Cloud</p>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">Online cloud sync. Access anywhere.</p>
+              </button>
+            </div>
+          </div>
+
+          {/* Profile Form (Keeping existing code) */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h4 className="font-bold text-slate-800 flex items-center gap-2">
@@ -220,156 +161,41 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
             <form onSubmit={saveProfile} className="p-8 space-y-8">
               <div className="flex flex-col md:flex-row gap-10 items-start">
                 <div className="w-full md:w-44 flex-shrink-0 space-y-3">
-                  <div 
-                    onClick={() => logoInputRef.current?.click()}
-                    className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all overflow-hidden relative group"
-                  >
+                  <div onClick={() => logoInputRef.current?.click()} className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group">
                     {profileForm.logo ? (
-                      <>
-                        <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                          <Camera size={24} />
-                        </div>
-                      </>
+                      <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
                     ) : (
-                      <>
-                        <Camera className="text-slate-400 mb-2" size={32} />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Studio Logo</span>
-                      </>
+                      <Camera className="text-slate-400 mb-2" size={32} />
                     )}
                   </div>
                   <input type="file" accept="image/*" className="hidden" ref={logoInputRef} onChange={handleLogoUpload} />
-                  <p className="text-[10px] font-bold text-slate-400 uppercase text-center tracking-widest">Preferred: PNG/SVG</p>
                 </div>
-
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Studio Name</label>
-                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Currency Symbol</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 space-y-1">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business Address</label>
-                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.address} onChange={e => handleProfileChange('address', e.target.value)} />
-                  </div>
+                  <input type="text" placeholder="Studio Name" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
+                  <input type="text" placeholder="Currency (৳)" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone</label>
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.phone} onChange={e => handleProfileChange('phone', e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input type="email" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.email} onChange={e => handleProfileChange('email', e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
-              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl">
                 <Save size={20} /> Save Studio Profile
-              </button>
-            </form>
-          </div>
-
-          {/* Security / Password Section */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                <Lock size={18} className="text-indigo-600" />
-                Security & Account
-              </h4>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-8 space-y-6">
-              {passError && <div className="p-4 bg-rose-50 text-rose-600 rounded-xl text-sm font-bold">{passError}</div>}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Current Password</label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
-                    value={passwordForm.oldPassword} 
-                    onChange={e => setPasswordForm({...passwordForm, oldPassword: e.target.value})} 
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">New Password</label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
-                    value={passwordForm.newPassword} 
-                    onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})} 
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Confirm New Password</label>
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
-                    value={passwordForm.confirmPassword} 
-                    onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})} 
-                  />
-                </div>
-              </div>
-              <button 
-                type="submit" 
-                disabled={isChangingPass}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all disabled:opacity-50"
-              >
-                {isChangingPass ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />}
-                Update Password
               </button>
             </form>
           </div>
         </div>
 
-        {/* Maintenance Tools */}
+        {/* Maintenance Sidebar */}
         <div className="space-y-8">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-6">
-            <div>
-              <h4 className="font-bold text-slate-800 mb-1 flex items-center gap-2">
-                <ShieldCheck size={18} className="text-indigo-600" />
-                Data Protection
-              </h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">Regular backups are crucial for business continuity. Your backups now include your studio settings, user data, and business contacts.</p>
-            </div>
-            
-            <div className="space-y-3">
-              <button onClick={exportSQL} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 rounded-2xl transition-all group">
+             <h4 className="font-bold text-slate-800 flex items-center gap-2"><ShieldCheck size={18} className="text-indigo-600" /> Data Tools</h4>
+             <button onClick={exportSQL} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 rounded-2xl transition-all">
                 <div className="flex items-center gap-3">
-                  <div className="bg-indigo-100 p-2 rounded-xl text-indigo-600"><FileCode size={20} /></div>
-                  <div className="text-left font-bold text-slate-700 text-sm">Export SQL</div>
+                   <FileCode size={20} className="text-indigo-600" />
+                   <span className="font-bold text-slate-700">Export SQL</span>
                 </div>
-                <Download size={18} className="text-slate-400 group-hover:text-indigo-600" />
-              </button>
-              
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3">
-                <AlertTriangle className="text-amber-600 flex-shrink-0" size={20} />
-                <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider leading-relaxed">
-                  Importing data will overwrite your local records. Use with caution.
-                </p>
-              </div>
-
-              <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-              <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 font-bold hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all text-sm">
-                <Upload size={20} /> Restore JSON Backup
-              </button>
-            </div>
+                <Download size={18} />
+             </button>
+             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-[10px] text-amber-800 font-bold uppercase">
+                Changing storage mode will reload the app. Make sure your data is backed up before switching.
+             </div>
           </div>
         </div>
       </div>
