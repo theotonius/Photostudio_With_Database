@@ -1,8 +1,9 @@
 
 <?php
-ob_start(); // Prevent accidental output
-error_reporting(E_ALL);
-ini_set('display_errors', 1); // Set to 1 temporarily to debug local errors
+// Prevent any HTML error output from breaking JSON parsing
+ob_start(); 
+error_reporting(0); // Set to 0 for production to prevent warnings from leaking into JSON
+ini_set('display_errors', 0);
 
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
@@ -11,13 +12,13 @@ header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers
 
 try {
     if (!file_exists('db_config.php')) {
-        throw new Exception("db_config.php missing. Please ensure this file exists in the same directory.");
+        throw new Exception("db_config.php is missing. Create it in the root folder.");
     }
 
     require_once 'db_config.php';
 
     if (!isset($pdo)) {
-        throw new Exception("Database connection variable \$pdo is not defined in db_config.php.");
+        throw new Exception("Database connection failed internally.");
     }
 
     $method = $_SERVER['REQUEST_METHOD'];
@@ -28,7 +29,7 @@ try {
         exit();
     }
 
-    // Initialize tables automatically
+    // Auto-initialize tables
     $pdo->exec("CREATE TABLE IF NOT EXISTS `users` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
         `username` varchar(50) NOT NULL UNIQUE,
@@ -38,7 +39,7 @@ try {
         PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-    // SEEDING: Create a demo user if table is empty
+    // Seed default admin if empty
     $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     if ($userCount == 0) {
         $hashedDemo = password_hash('password123', PASSWORD_DEFAULT);
@@ -85,23 +86,21 @@ try {
 
         if ($action === 'signup') {
             if (empty($data['username']) || empty($data['password']) || empty($data['email'])) {
-                http_response_code(400);
-                echo json_encode(["status" => "error", "message" => "All fields required."]);
-                exit();
+                throw new Exception("All fields are required for signup.");
             }
 
             $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
             $check->execute([$data['username'], $data['email']]);
             if ($check->fetch()) {
                 http_response_code(409);
-                echo json_encode(["status" => "error", "message" => "Username or Email exists."]);
+                echo json_encode(["status" => "error", "message" => "Username or Email already exists."]);
                 exit();
             }
 
             $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
             $stmt->execute([$data['username'], $data['email'], $hashedPassword]);
-            echo json_encode(["status" => "success", "message" => "Account created!"]);
+            echo json_encode(["status" => "success", "message" => "Account created successfully!"]);
             exit();
         } 
         elseif ($action === 'login') {
@@ -112,7 +111,7 @@ try {
                 echo json_encode(["status" => "success", "user" => ["username" => $user['username'], "email" => $user['email']]]);
             } else {
                 http_response_code(401);
-                echo json_encode(["status" => "error", "message" => "Invalid credentials."]);
+                echo json_encode(["status" => "error", "message" => "Invalid username or password."]);
             }
             exit();
         }
@@ -166,6 +165,7 @@ try {
         }
     }
 } catch (Exception $e) {
+    ob_clean(); // Remove any previous output
     http_response_code(500);
     echo json_encode(["status" => "error", "message" => $e->getMessage()]);
 }

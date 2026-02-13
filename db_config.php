@@ -1,22 +1,30 @@
 
 <?php
-// আপনার লোকাল সার্ভারের (যেমন XAMPP) ডাটাবেস তথ্য এখানে দিন
+// WAMP/XAMPP Database Configuration
 $host = 'localhost';
-$db_name = 'photo_studio_db'; // আপনার তৈরি করা ডাটাবেসের নাম
-$username = 'root';           // XAMPP এর ডিফল্ট ইউজার 'root'
-$password = '';               // XAMPP এর ডিফল্ট পাসওয়ার্ড খালি থাকে
+$db_name = 'photo_studio_db'; 
+$username = 'root';           
+$password = '';               
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$db_name;charset=utf8", $username, $password);
+    // 1. Connect to MySQL server first without selecting a DB
+    $pdo = new PDO("mysql:host=$host;charset=utf8", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 2. Try to create the database if it doesn't exist
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+    
+    // 3. Connect to the specific database
+    $pdo->exec("USE `$db_name`;");
+    
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // ডাটাবেস কানেকশন ফেইল করলে JSON মেসেজ পাঠাবে
+    // If we fail here, we must return clean JSON for the frontend to handle
     header('Content-Type: application/json');
     http_response_code(500);
     echo json_encode([
         "status" => "error", 
-        "message" => "Database Connection failed. Please check db_config.php. Error: " . $e->getMessage()
+        "message" => "Database Connection failed. Ensure WAMP/XAMPP MySQL is running. Error: " . $e->getMessage()
     ]);
     exit();
 }

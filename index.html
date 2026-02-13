@@ -10,11 +10,11 @@
     <script>
       /** 
        * Gemini API Key Configuration
-       * Replace 'YOUR_GEMINI_API_KEY_HERE' with your real key from ai.google.dev
+       * Replace 'YOUR_GEMINI_API_KEY_HERE' with your real key from https://aistudio.google.com/app/apikey
        */
       window.process = {
         env: {
-          API_KEY: 'AIzaSyDQCgCSbQT-W6JbhRqdeZb2pVX-micnXUM' 
+          API_KEY: 'YOUR_GEMINI_API_KEY_HERE' 
         }
       };
     </script>
@@ -53,8 +53,8 @@
 <body>
     <div id="root"></div>
     <!-- 
-      IMPORTANT: If you see a MIME type error in WAMP, create a file named '.htaccess' 
-      in your project folder and add this line: 
+      WAMP/XAMPP USERS:
+      If you get a 'MIME type' error, create a file named '.htaccess' in this folder and add:
       AddType application/javascript .tsx
     -->
     <script type="module" src="index.tsx"></script>
