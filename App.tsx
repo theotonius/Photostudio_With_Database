@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw } from 'lucide-react';
+import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw, AlertCircle } from 'lucide-react';
 import { Client, ShootStatus, DashboardStats, StudioProfile } from './types';
 import ClientModal from './components/ClientModal';
 import DashboardCards from './components/DashboardCards';
@@ -34,12 +34,12 @@ const App: React.FC = () => {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [studioProfile, setStudioProfile] = useState<StudioProfile>(DEFAULT_STUDIO);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOffline, setIsOffline] = useState(currentUser?.mode === 'demo');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Advanced Filter States
   const [filterStatus, setFilterStatus] = useState<ShootStatus | 'All'>('All');
   const [filterEventType, setFilterEventType] = useState<string>('All');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const fetchFromDatabase = async () => {
+    setBackendError(null);
     if (currentUser?.mode === 'demo') {
       const savedClients = localStorage.getItem('photo_studio_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
@@ -69,33 +70,29 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       const clientRes = await fetch('api.php?type=clients');
-      if (!clientRes.ok) throw new Error(`API error: ${clientRes.status}`);
-
-      const clientContentType = clientRes.headers.get("content-type");
-      if (clientContentType && clientContentType.includes("application/json")) {
-        const clientData = await clientRes.json();
-        const clientList = Array.isArray(clientData) ? clientData : [];
-        setClients(clientList);
-        localStorage.setItem('photo_studio_clients', JSON.stringify(clientList));
-      } else {
-        throw new Error('Non-JSON response');
+      if (!clientRes.ok) {
+        const errorData = await clientRes.json();
+        throw new Error(errorData.message || `API error: ${clientRes.status}`);
       }
+
+      const clientData = await clientRes.json();
+      const clientList = Array.isArray(clientData) ? clientData : [];
+      setClients(clientList);
+      localStorage.setItem('photo_studio_clients', JSON.stringify(clientList));
 
       const settingsRes = await fetch('api.php?type=settings');
       if (settingsRes.ok) {
-        const settingsContentType = settingsRes.headers.get("content-type");
-        if (settingsContentType && settingsContentType.includes("application/json")) {
-          const settingsData = await settingsRes.json();
-          if (settingsData && !settingsData.status) {
-            setStudioProfile(settingsData);
-            localStorage.setItem('photo_studio_profile', JSON.stringify(settingsData));
-          }
+        const settingsData = await settingsRes.json();
+        if (settingsData && !settingsData.status) {
+          setStudioProfile(settingsData);
+          localStorage.setItem('photo_studio_profile', JSON.stringify(settingsData));
         }
       }
 
       setIsOffline(false);
-    } catch (error) {
-      console.warn('Working in Local/Offline Mode');
+    } catch (error: any) {
+      console.warn('Working in Local/Offline Mode:', error.message);
+      setBackendError("Backend server (PHP) not reachable or Database not configured. Running in Local Browser Mode.");
       setIsOffline(true);
       const savedClients = localStorage.getItem('photo_studio_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
@@ -152,19 +149,13 @@ const App: React.FC = () => {
 
   const filteredClients = useMemo(() => {
     return clients.filter(client => {
-      // Search text filter
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             client.phone.includes(searchTerm) ||
                             client.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (client.location && client.location.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      // Status filter
       const matchesStatus = filterStatus === 'All' || client.status === filterStatus;
-      
-      // Event type filter
       const matchesEventType = filterEventType === 'All' || client.eventType === filterEventType;
-      
-      // Date range filter
       const matchesDate = (!filterStartDate || client.eventDate >= filterStartDate) &&
                           (!filterEndDate || client.eventDate <= filterEndDate);
                           
@@ -311,6 +302,16 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 overflow-y-auto pb-12">
+          {backendError && (
+            <div className="bg-rose-500 text-white px-6 py-2 flex items-center justify-between text-xs font-bold animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={14} />
+                <span>{backendError}</span>
+              </div>
+              <button onClick={() => setBackendError(null)}><X size={14} /></button>
+            </div>
+          )}
+
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold text-slate-800 capitalize">
@@ -359,7 +360,6 @@ const App: React.FC = () => {
 
             {activeTab === 'clients' && (
               <div className="space-y-6">
-                {/* ADVANCED FILTER BAR */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap items-end gap-4">
                   <div className="flex-1 min-w-[150px] space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Shoot Status</label>
