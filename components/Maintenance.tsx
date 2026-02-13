@@ -1,7 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-/* Added WifiOff to imports from lucide-react */
-import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2, Cloud, WifiOff } from 'lucide-react';
+import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2, Cloud, WifiOff, Link as LinkIcon } from 'lucide-react';
 import { Client, Contact, StudioProfile } from '../types';
 
 interface MaintenanceProps {
@@ -41,7 +40,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
   const saveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateProfile(profileForm);
-    alert('Studio Profile Updated!');
+    alert('Studio Profile Updated Successfully!');
   };
 
   const updateStorageMode = (mode: 'local' | 'sql' | 'firebase') => {
@@ -59,7 +58,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
     
     const escape = (val: any) => val === null || val === undefined ? 'NULL' : `'${String(val).replace(/'/g, "''")}'`;
 
-    // SQL tables structure...
     sqlContent += `CREATE TABLE IF NOT EXISTS \`users\` (\n  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n  \`username\` varchar(50) NOT NULL UNIQUE,\n  \`email\` varchar(255) NOT NULL UNIQUE,\n  \`password\` varchar(255) NOT NULL,\n  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
     sqlContent += `CREATE TABLE IF NOT EXISTS \`studio_settings\` (\n  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n  \`name\` varchar(255) NOT NULL,\n  \`logo\` longtext,\n  \`address\` text,\n  \`phone\` varchar(50),\n  \`email\` varchar(255),\n  \`website\` varchar(255),\n  \`currency\` varchar(10),\n  \`taxNumber\` varchar(100),\n  PRIMARY KEY (\`id\`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
@@ -150,7 +148,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
             </div>
           </div>
 
-          {/* Profile Form (Keeping existing code) */}
+          {/* Expanded Studio Branding Section */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <h4 className="font-bold text-slate-800 flex items-center gap-2">
@@ -161,22 +159,76 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
             <form onSubmit={saveProfile} className="p-8 space-y-8">
               <div className="flex flex-col md:flex-row gap-10 items-start">
                 <div className="w-full md:w-44 flex-shrink-0 space-y-3">
-                  <div onClick={() => logoInputRef.current?.click()} className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group">
+                  <div onClick={() => logoInputRef.current?.click()} className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group transition-all hover:bg-indigo-50 hover:border-indigo-200">
                     {profileForm.logo ? (
-                      <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
+                      <>
+                        <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                          <Camera size={24} />
+                        </div>
+                      </>
                     ) : (
-                      <Camera className="text-slate-400 mb-2" size={32} />
+                      <div className="text-center">
+                        <Camera className="text-slate-300 mx-auto mb-2" size={32} />
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Upload Logo</p>
+                      </div>
                     )}
                   </div>
                   <input type="file" accept="image/*" className="hidden" ref={logoInputRef} onChange={handleLogoUpload} />
                 </div>
+
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <input type="text" placeholder="Studio Name" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
-                  <input type="text" placeholder="Currency (৳)" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Studio Business Name</label>
+                    <input type="text" placeholder="e.g. Dream Moments Photography" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Currency Symbol</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="text" placeholder="৳" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Office Address</label>
+                    <input type="text" placeholder="123 Studio Lane, Dhaka, Bangladesh" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-600" value={profileForm.address} onChange={e => handleProfileChange('address', e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl">
-                <Save size={20} /> Save Studio Profile
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="tel" placeholder="+880 1..." className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.phone} onChange={e => handleProfileChange('phone', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Business Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="email" placeholder="hello@studio.com" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.email} onChange={e => handleProfileChange('email', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Official Website</label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="text" placeholder="www.studio.com" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.website} onChange={e => handleProfileChange('website', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tax Identification / BIN Number (Optional)</label>
+                    <div className="relative">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="text" placeholder="BIN-123456789" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.taxNumber || ''} onChange={e => handleProfileChange('taxNumber', e.target.value)} />
+                    </div>
+                  </div>
+              </div>
+
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-100 uppercase tracking-widest text-xs">
+                <Save size={20} /> Update Studio Profile
               </button>
             </form>
           </div>
@@ -185,16 +237,18 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, 
         {/* Maintenance Sidebar */}
         <div className="space-y-8">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-6">
-             <h4 className="font-bold text-slate-800 flex items-center gap-2"><ShieldCheck size={18} className="text-indigo-600" /> Data Tools</h4>
-             <button onClick={exportSQL} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 rounded-2xl transition-all">
+             <h4 className="font-bold text-slate-800 flex items-center gap-2"><ShieldCheck size={18} className="text-indigo-600" /> Data Management</h4>
+             <button onClick={exportSQL} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 rounded-2xl transition-all group">
                 <div className="flex items-center gap-3">
-                   <FileCode size={20} className="text-indigo-600" />
-                   <span className="font-bold text-slate-700">Export SQL</span>
+                   <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                      <FileCode size={20} />
+                   </div>
+                   <span className="font-bold text-slate-700">Export SQL Backup</span>
                 </div>
-                <Download size={18} />
+                <Download size={18} className="text-slate-300" />
              </button>
-             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-[10px] text-amber-800 font-bold uppercase">
-                Changing storage mode will reload the app. Make sure your data is backed up before switching.
+             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-[10px] text-amber-800 font-bold uppercase leading-relaxed">
+                আপনার স্টুডিওর প্রোফাইল তথ্য পরিবর্তন করার পর এটি সেভ বাটনে ক্লিক করে নিশ্চিত করুন। এটি ইনভয়েস জেনারেশনের সময় অটোমেটিক আপডেট হয়ে যাবে।
              </div>
           </div>
         </div>

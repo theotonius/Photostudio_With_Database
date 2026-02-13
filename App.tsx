@@ -14,7 +14,7 @@ import CalendarTab from './components/CalendarTab.tsx';
 import ContactTable from './components/ContactTable.tsx';
 import ContactModal from './components/ContactModal.tsx';
 
-// Import Firebase (assuming the user will fill config in firebase.ts)
+// Import Firebase
 import { db, collection, getDocs, setDoc, doc, deleteDoc, query, orderBy } from './firebase.ts';
 
 const DEFAULT_STUDIO: StudioProfile = {
@@ -41,7 +41,6 @@ const App: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [studioProfile, setStudioProfile] = useState<StudioProfile>(DEFAULT_STUDIO);
   
-  // Storage Mode Selection
   const [storageMode, setStorageMode] = useState<'local' | 'sql' | 'firebase'>(() => {
     return (localStorage.getItem('studio_storage_mode') as any) || 'local';
   });
@@ -123,6 +122,25 @@ const App: React.FC = () => {
     if (isAuthenticated) fetchFromDatabase();
   }, [isAuthenticated, storageMode]);
 
+  const handleUpdateProfile = async (profile: StudioProfile) => {
+    setStudioProfile(profile);
+    localStorage.setItem('photo_studio_profile', JSON.stringify(profile));
+
+    if (storageMode === 'firebase') {
+      try {
+        await setDoc(doc(db, "settings", "profile"), profile);
+      } catch (e) { console.error("Firebase settings sync error:", e); }
+    } else if (storageMode === 'sql' && !isOffline) {
+      try {
+        await fetch('api.php?type=settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile)
+        });
+      } catch (e) { console.error("SQL settings sync error:", e); }
+    }
+  };
+
   const stats = useMemo<DashboardStats>(() => {
     return {
       totalClients: clients.length,
@@ -151,7 +169,6 @@ const App: React.FC = () => {
     const createdAt = editingClient ? editingClient.createdAt : new Date().toISOString();
     const finalClient = { ...clientData, id, createdAt };
 
-    // Update Local State
     let updatedClients;
     if (editingClient) {
       updatedClients = clients.map(c => c.id === id ? finalClient : c);
@@ -161,13 +178,11 @@ const App: React.FC = () => {
     setClients(updatedClients);
     localStorage.setItem('photo_studio_clients', JSON.stringify(updatedClients));
 
-    // Firebase Sync
     if (storageMode === 'firebase') {
       try {
         await setDoc(doc(db, "clients", id), finalClient);
       } catch (e) { console.error("Firebase save error:", e); }
     } 
-    // SQL Sync
     else if (storageMode === 'sql' && !isOffline) {
       try {
         await fetch('api.php?type=clients', {
@@ -277,6 +292,7 @@ const App: React.FC = () => {
             <ContactIcon size={20} />
             <span className="font-bold">Contacts</span>
           </button>
+          {/* Fix: removed undefined setSelectedDay(null) call which was causing a reference error */}
           <button onClick={() => setActiveTab('calendar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'calendar' ? 'bg-indigo-600 shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
             <CalendarIcon size={20} />
             <span className="font-bold">Calendar</span>
@@ -359,7 +375,7 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'calendar' && <CalendarTab clients={clients} onViewClient={(c) => {setSelectedClient(c); setIsDetailOpen(true);}} />}
-          {activeTab === 'maintenance' && <Maintenance clients={clients} contacts={contacts} onImport={(c) => setClients(c)} studioProfile={studioProfile} onUpdateProfile={setStudioProfile} storageMode={storageMode} onStorageModeChange={setStorageMode} />}
+          {activeTab === 'maintenance' && <Maintenance clients={clients} contacts={contacts} onImport={(c) => setClients(c)} studioProfile={studioProfile} onUpdateProfile={handleUpdateProfile} storageMode={storageMode} onStorageModeChange={setStorageMode} />}
         </div>
       </main>
 
