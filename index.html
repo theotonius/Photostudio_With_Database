@@ -8,10 +8,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      // ব্রাউজারে process.env এরর হ্যান্ডলিং করার জন্য শিম
+      /**
+       * এখানে আপনার Gemini API Key বসান।
+       * অ্যাপটি 'process.env.API_KEY' ব্যবহার করে এখান থেকেই কি (Key) সংগ্রহ করবে।
+       */
       window.process = {
         env: {
-          API_KEY: '' // এখানে আপনার কি-টি বসাতে পারেন অথবা বিল্ড টুল ব্যবহার করতে পারেন
+          API_KEY: 'YOUR_API_KEY_HERE' 
         }
       };
     </script>
@@ -49,6 +52,20 @@
         .print-only {
             display: none;
         }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
+        }
     </style>
 <script type="importmap">
 {
@@ -64,5 +81,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
+    <!-- নিচের এই লাইনটি অ্যাপটি সচল করার জন্য অত্যন্ত গুরুত্বপূর্ণ -->
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
