@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { Camera, Lock, User, AlertCircle, ArrowRight, Mail, Loader2, Sparkles, Zap } from 'lucide-react';
+import { Camera, Lock, User, AlertCircle, ArrowRight, Mail, Loader2, Sparkles, Zap, Cloud } from 'lucide-react';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../firebase.ts';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginProps {
@@ -9,26 +10,89 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isSignup, setIsSignup] = useState(false);
-  const [username, setUsername] = useState('');
+  const [authMode, setAuthMode] = useState<'sql' | 'firebase'>('sql');
+  const [username, setUsername] = useState(''); // Use as Email for Firebase
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
-  // This function allows the user to enter the dashboard immediately without a database
   const handleInstantAccess = () => {
     const guestUser = { username: 'Guest Admin', email: 'guest@example.com', mode: 'demo' };
     localStorage.setItem('photo_studio_auth', 'true');
     localStorage.setItem('photo_studio_user', JSON.stringify(guestUser));
+    localStorage.setItem('studio_storage_mode', 'local');
     onLogin(guestUser);
   };
 
   const handleDemoCredentials = () => {
     setIsSignup(false);
+    setAuthMode('sql');
     setUsername('admin');
     setPassword('password123');
     setError('');
+  };
+
+  const handleFirebaseSubmit = async () => {
+    try {
+      if (isSignup) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        alert('Firebase account created! You can now log in.');
+        setIsSignup(false);
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, username, password);
+        const user = { 
+          username: userCredential.user.email?.split('@')[0] || 'User', 
+          email: userCredential.user.email,
+          mode: 'firebase'
+        };
+        localStorage.setItem('photo_studio_auth', 'true');
+        localStorage.setItem('photo_studio_user', JSON.stringify(user));
+        localStorage.setItem('studio_storage_mode', 'firebase');
+        onLogin(user);
+      }
+    } catch (err: any) {
+      let msg = 'Firebase Auth failed.';
+      if (err.code === 'auth/user-not-found') msg = 'User not found.';
+      else if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
+      else if (err.code === 'auth/email-already-in-use') msg = 'Email already exists.';
+      else msg = err.message;
+      setError(msg);
+    }
+  };
+
+  const handleSqlSubmit = async () => {
+    const endpoint = isSignup ? 'api.php?type=auth&action=signup' : 'api.php?type=auth&action=login';
+    const body = isSignup ? { username, email, password } : { username, password };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('Server returned an invalid response. Ensure SQL server is running.');
+    }
+
+    if (response.ok) {
+      if (isSignup) {
+        alert(data.message || 'SQL account created! Please login.');
+        setIsSignup(false);
+      } else {
+        localStorage.setItem('photo_studio_auth', 'true');
+        localStorage.setItem('photo_studio_user', JSON.stringify(data.user));
+        localStorage.setItem('studio_storage_mode', 'sql');
+        onLogin(data.user);
+      }
+    } else {
+      setError(data.message || 'Authentication failed.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,42 +101,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoading(true);
 
     try {
-      const endpoint = isSignup ? 'api.php?type=auth&action=signup' : 'api.php?type=auth&action=login';
-      const body = isSignup ? { username, email, password } : { username, password };
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      // Handle cases where the response might not be JSON (like PHP errors)
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error('Server returned an invalid response. Check your database configuration.');
-      }
-
-      if (response.ok) {
-        if (isSignup) {
-          alert(data.message || 'Account created! Please login.');
-          setIsSignup(false);
-          setPassword('');
-          setUsername('');
-          setEmail('');
-        } else {
-          localStorage.setItem('photo_studio_auth', 'true');
-          localStorage.setItem('photo_studio_user', JSON.stringify(data.user));
-          onLogin(data.user);
-        }
+      if (authMode === 'firebase') {
+        await handleFirebaseSubmit();
       } else {
-        setError(data.message || 'Authentication failed. Please check your inputs.');
+        await handleSqlSubmit();
       }
     } catch (err: any) {
-      setError(err.message || 'Connection failed. You can use "Instant Demo Access" to bypass this.');
-      console.error('Auth Error Details:', err);
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +115,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Decorative Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/20 blur-[120px] rounded-full"></div>
 
@@ -90,11 +124,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <Camera className="text-white -rotate-3" size={40} />
           </div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
-            {isSignup ? 'Sign Up' : 'Welcome Back'}
+            {isSignup ? 'Create Account' : 'Studio Login'}
           </h2>
-          <p className="text-slate-500 font-medium">
-            {isSignup ? 'Start managing your studio today' : 'Access your studio management tools'}
-          </p>
+          
+          <div className="flex bg-slate-100 p-1 rounded-xl mt-6 border border-slate-200">
+            <button 
+              onClick={() => {setAuthMode('sql'); setError('');}} 
+              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${authMode === 'sql' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              SQL Server
+            </button>
+            <button 
+              onClick={() => {setAuthMode('firebase'); setError('');}} 
+              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${authMode === 'firebase' ? 'bg-indigo-600 shadow-sm text-white' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              Firebase Cloud
+            </button>
+          </div>
         </div>
 
         <div className="px-10 pb-10 space-y-6">
@@ -105,63 +151,47 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
           )}
 
-          {/* INSTANT ACCESS BUTTON */}
-          {!isSignup && (
+          {!isSignup && authMode === 'sql' && (
             <button 
               type="button"
               onClick={handleInstantAccess}
-              className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-[0.98] animate-pulse"
+              className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100"
             >
               <Zap size={20} fill="currentColor" />
               <span>Instant Guest Access</span>
             </button>
           )}
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-xs uppercase font-black tracking-widest text-slate-400"><span className="bg-white px-4">OR USE DATABASE</span></div>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isSignup && (
-              <button 
-                type="button"
-                onClick={handleDemoCredentials}
-                className="w-full py-2.5 px-4 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors"
-              >
-                <Sparkles size={14} />
-                Load Demo Credentials
+            {!isSignup && authMode === 'sql' && (
+              <button type="button" onClick={handleDemoCredentials} className="w-full py-2.5 px-4 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+                <Sparkles size={14} /> Load SQL Demo
               </button>
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Username</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
+                {authMode === 'firebase' ? 'Email Address' : 'Username'}
+              </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                {authMode === 'firebase' ? <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} /> : <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />}
                 <input 
-                  type="text" 
+                  type={authMode === 'firebase' ? 'email' : 'text'} 
                   required
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
-                  placeholder="admin"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none font-bold text-slate-800"
+                  placeholder={authMode === 'firebase' ? 'admin@studio.com' : 'admin'}
+                  value={authMode === 'firebase' && !isSignup ? username : isSignup ? email : username}
+                  onChange={(e) => authMode === 'firebase' && !isSignup ? setUsername(e.target.value) : isSignup ? setEmail(e.target.value) : setUsername(e.target.value)}
                 />
               </div>
             </div>
 
-            {isSignup && (
-              <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
+            {isSignup && authMode === 'sql' && (
+              <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                  <input 
-                    type="email" 
-                    required
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
-                    placeholder="admin@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
+                  <input type="email" required className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
               </div>
             )}
@@ -170,36 +200,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="flex justify-between items-center ml-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
                 {!isSignup && (
-                  <button 
-                    type="button"
-                    onClick={() => setShowForgotModal(true)}
-                    className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest"
-                  >
-                    Forgot?
-                  </button>
+                  <button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Forgot?</button>
                 )}
               </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                <input 
-                  type="password" 
-                  required
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <input type="password" required className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             </div>
 
-            <button 
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl active:scale-[0.98] disabled:opacity-50"
-            >
+            <button type="submit" disabled={isLoading} className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-xl disabled:opacity-50 ${authMode === 'firebase' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>
               {isLoading ? <Loader2 size={24} className="animate-spin" /> : (
                 <>
-                  <span>{isSignup ? 'Create Studio Account' : 'Sign In to Dashboard'}</span>
+                  <span>{isSignup ? 'Join Studio' : `Login via ${authMode.toUpperCase()}`}</span>
                   <ArrowRight size={20} />
                 </>
               )}
@@ -207,23 +220,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </form>
 
           <div className="text-center">
-            <button 
-              type="button"
-              onClick={() => {
-                setIsSignup(!isSignup);
-                setError('');
-              }}
-              className="text-xs font-black text-indigo-600 hover:underline uppercase tracking-widest"
-            >
+            <button type="button" onClick={() => { setIsSignup(!isSignup); setError(''); }} className="text-xs font-black text-indigo-600 hover:underline uppercase tracking-widest">
               {isSignup ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
             </button>
           </div>
         </div>
       </div>
 
-      {showForgotModal && (
-        <ForgotPasswordModal onClose={() => setShowForgotModal(false)} />
-      )}
+      {showForgotModal && <ForgotPasswordModal onClose={() => setShowForgotModal(false)} />}
     </div>
   );
 };
