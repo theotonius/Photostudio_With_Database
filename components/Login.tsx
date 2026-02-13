@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Camera, Lock, User, AlertCircle, ArrowRight, Mail, Loader2, Sparkles, Zap, Cloud } from 'lucide-react';
+import { Camera, Lock, User, AlertCircle, ArrowRight, Mail, Loader2, Sparkles, Cloud } from 'lucide-react';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../firebase.ts';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
@@ -17,14 +17,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
-
-  const handleInstantAccess = () => {
-    const guestUser = { username: 'Guest Admin', email: 'guest@example.com', mode: 'demo' };
-    localStorage.setItem('photo_studio_auth', 'true');
-    localStorage.setItem('photo_studio_user', JSON.stringify(guestUser));
-    localStorage.setItem('studio_storage_mode', 'local');
-    onLogin(guestUser);
-  };
 
   const handleDemoCredentials = () => {
     setIsSignup(false);
@@ -149,17 +141,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
-          )}
-
-          {!isSignup && authMode === 'sql' && (
-            <button 
-              type="button"
-              onClick={handleInstantAccess}
-              className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100"
-            >
-              <Zap size={20} fill="currentColor" />
-              <span>Instant Guest Access</span>
-            </button>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
