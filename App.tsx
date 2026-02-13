@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Users, Camera, DollarSign, Calendar, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff } from 'lucide-react';
+import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw } from 'lucide-react';
 import { Client, ShootStatus, DashboardStats, StudioProfile } from './types';
 import ClientModal from './components/ClientModal';
 import DashboardCards from './components/DashboardCards';
@@ -10,6 +10,7 @@ import AIConceptGenerator from './components/AIConceptGenerator';
 import Login from './components/Login';
 import Maintenance from './components/Maintenance';
 import ClientDetailModal from './components/ClientDetailModal';
+import CalendarTab from './components/CalendarTab';
 
 const DEFAULT_STUDIO: StudioProfile = {
   name: 'Studio Pro Photography',
@@ -26,15 +27,27 @@ const App: React.FC = () => {
     return localStorage.getItem('photo_studio_auth') === 'true';
   });
 
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    const saved = localStorage.getItem('photo_studio_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [clients, setClients] = useState<Client[]>([]);
   const [studioProfile, setStudioProfile] = useState<StudioProfile>(DEFAULT_STUDIO);
 
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [isOffline, setIsOffline] = useState(currentUser?.mode === 'demo');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Advanced Filter States
+  const [filterStatus, setFilterStatus] = useState<ShootStatus | 'All'>('All');
+  const [filterEventType, setFilterEventType] = useState<string>('All');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'maintenance'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'calendar' | 'maintenance'>('dashboard');
   const [isPrinting, setIsPrinting] = useState(false);
   const [printClient, setPrintClient] = useState<Client | null>(null);
   const [isAIOpen, setIsAIOpen] = useState(false);
@@ -44,30 +57,45 @@ const App: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const fetchFromDatabase = async () => {
+    if (currentUser?.mode === 'demo') {
+      const savedClients = localStorage.getItem('photo_studio_clients');
+      if (savedClients) setClients(JSON.parse(savedClients));
+      const savedProfile = localStorage.getItem('photo_studio_profile');
+      if (savedProfile) setStudioProfile(JSON.parse(savedProfile));
+      setIsOffline(true);
+      return;
+    }
+
     setIsSyncing(true);
     try {
-      // Fetch Clients
       const clientRes = await fetch('api.php?type=clients');
-      const clientData = await clientRes.json();
-      const clientList = Array.isArray(clientData) ? clientData : [];
-      setClients(clientList);
-      localStorage.setItem('photo_studio_clients', JSON.stringify(clientList));
+      if (!clientRes.ok) throw new Error(`API error: ${clientRes.status}`);
 
-      // Fetch Settings
-      const settingsRes = await fetch('api.php?type=settings');
-      const settingsData = await settingsRes.json();
-      if (settingsData) {
-        setStudioProfile(settingsData);
-        localStorage.setItem('photo_studio_profile', JSON.stringify(settingsData));
+      const clientContentType = clientRes.headers.get("content-type");
+      if (clientContentType && clientContentType.includes("application/json")) {
+        const clientData = await clientRes.json();
+        const clientList = Array.isArray(clientData) ? clientData : [];
+        setClients(clientList);
+        localStorage.setItem('photo_studio_clients', JSON.stringify(clientList));
       } else {
-        // If no settings in DB, use local or default
-        const saved = localStorage.getItem('photo_studio_profile');
-        if (saved) setStudioProfile(JSON.parse(saved));
+        throw new Error('Non-JSON response');
+      }
+
+      const settingsRes = await fetch('api.php?type=settings');
+      if (settingsRes.ok) {
+        const settingsContentType = settingsRes.headers.get("content-type");
+        if (settingsContentType && settingsContentType.includes("application/json")) {
+          const settingsData = await settingsRes.json();
+          if (settingsData && !settingsData.status) {
+            setStudioProfile(settingsData);
+            localStorage.setItem('photo_studio_profile', JSON.stringify(settingsData));
+          }
+        }
       }
 
       setIsOffline(false);
     } catch (error) {
-      console.error('Fetch error:', error);
+      console.warn('Working in Local/Offline Mode');
       setIsOffline(true);
       const savedClients = localStorage.getItem('photo_studio_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
@@ -82,16 +110,17 @@ const App: React.FC = () => {
     if (isAuthenticated) {
       fetchFromDatabase();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
   const saveToDatabase = async (client: Client) => {
-    if (isOffline) return;
+    if (isOffline || currentUser?.mode === 'demo') return;
     try {
-      await fetch('api.php?type=clients', {
+      const res = await fetch('api.php?type=clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(client)
       });
+      if (!res.ok) throw new Error('Failed to save to cloud');
     } catch (error) {
       setIsOffline(true);
     }
@@ -100,17 +129,14 @@ const App: React.FC = () => {
   const updateStudioProfile = async (profile: StudioProfile) => {
     setStudioProfile(profile);
     localStorage.setItem('photo_studio_profile', JSON.stringify(profile));
-    
-    if (!isOffline) {
+    if (!isOffline && currentUser?.mode !== 'demo') {
       try {
         await fetch('api.php?type=settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(profile)
         });
-      } catch (error) {
-        console.error('Failed to sync settings:', error);
-      }
+      } catch (error) {}
     }
   };
 
@@ -124,11 +150,35 @@ const App: React.FC = () => {
     };
   }, [clients]);
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.phone.includes(searchTerm) ||
-    client.eventType.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const filteredClients = useMemo(() => {
+    return clients.filter(client => {
+      // Search text filter
+      const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            client.phone.includes(searchTerm) ||
+                            client.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (client.location && client.location.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Status filter
+      const matchesStatus = filterStatus === 'All' || client.status === filterStatus;
+      
+      // Event type filter
+      const matchesEventType = filterEventType === 'All' || client.eventType === filterEventType;
+      
+      // Date range filter
+      const matchesDate = (!filterStartDate || client.eventDate >= filterStartDate) &&
+                          (!filterEndDate || client.eventDate <= filterEndDate);
+                          
+      return matchesSearch && matchesStatus && matchesEventType && matchesDate;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [clients, searchTerm, filterStatus, filterEventType, filterStartDate, filterEndDate]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('All');
+    setFilterEventType('All');
+    setFilterStartDate('');
+    setFilterEndDate('');
+  };
 
   const handleAddClient = async (clientData: Omit<Client, 'id' | 'createdAt' | 'dueAmount'>) => {
     const newClient: Client = {
@@ -159,7 +209,11 @@ const App: React.FC = () => {
       const updatedClients = clients.filter(c => c.id !== id);
       setClients(updatedClients);
       localStorage.setItem('photo_studio_clients', JSON.stringify(updatedClients));
-      if (!isOffline) await fetch(`api.php?type=clients&id=${id}`, { method: 'DELETE' });
+      if (!isOffline && currentUser?.mode !== 'demo') {
+        try {
+          await fetch(`api.php?type=clients&id=${id}`, { method: 'DELETE' });
+        } catch (e) {}
+      }
     }
   };
 
@@ -176,10 +230,15 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('photo_studio_auth');
+    localStorage.removeItem('photo_studio_user');
     setIsAuthenticated(false);
+    setCurrentUser(null);
   };
 
-  if (!isAuthenticated) return <Login onLogin={() => setIsAuthenticated(true)} />;
+  if (!isAuthenticated) return <Login onLogin={(user) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  }} />;
 
   return (
     <>
@@ -214,6 +273,10 @@ const App: React.FC = () => {
                 <Users size={20} />
                 <span>Clients</span>
               </button>
+              <button onClick={() => setActiveTab('calendar')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'calendar' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}>
+                <CalendarIcon size={20} />
+                <span>Calendar</span>
+              </button>
               <button onClick={() => setActiveTab('maintenance')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'maintenance' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}>
                 <Settings size={20} />
                 <span>Settings</span>
@@ -226,6 +289,10 @@ const App: React.FC = () => {
           </div>
           
           <div className="mt-auto p-6 space-y-3">
+            <div className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Active User</p>
+              <p className="text-sm font-bold text-white truncate">{currentUser?.username}</p>
+            </div>
             {isOffline && (
               <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-2 flex items-center gap-2 text-amber-500">
                 <WifiOff size={16} />
@@ -247,14 +314,14 @@ const App: React.FC = () => {
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold text-slate-800 capitalize">
-                {activeTab === 'dashboard' ? 'Overview' : activeTab === 'clients' ? 'Client Records' : 'Settings & Tools'}
+                {activeTab === 'dashboard' ? 'Overview' : activeTab === 'clients' ? 'Client Records' : activeTab === 'calendar' ? 'Booking Calendar' : 'Settings & Tools'}
               </h2>
             </div>
             
             <div className="flex items-center gap-4 w-full max-w-2xl">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="text" placeholder="Search..." className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <input type="text" placeholder="Search by name, phone or event..." className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </header>
@@ -291,9 +358,84 @@ const App: React.FC = () => {
             )}
 
             {activeTab === 'clients' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <ClientTable clients={filteredClients} onDelete={handleDeleteClient} onEdit={(c) => {setEditingClient(c); setIsModalOpen(true)}} onPrint={(c) => {setPrintClient(c); setIsPrinting(true)}} onAI={(c) => {setAiClient(c); setIsAIOpen(true)}} onView={handleViewClient} />
+              <div className="space-y-6">
+                {/* ADVANCED FILTER BAR */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap items-end gap-4">
+                  <div className="flex-1 min-w-[150px] space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Shoot Status</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none font-bold text-sm text-slate-700 cursor-pointer"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value as ShootStatus | 'All')}
+                      >
+                        <option value="All">All Statuses</option>
+                        {Object.values(ShootStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" size={14} />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-[150px] space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Type</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none font-bold text-sm text-slate-700 cursor-pointer"
+                        value={filterEventType}
+                        onChange={(e) => setFilterEventType(e.target.value)}
+                      >
+                        <option value="All">All Types</option>
+                        <option>Wedding</option><option>Birthday</option><option>Corporate</option><option>Photoshoot</option><option>Portfolio</option><option>Other</option>
+                      </select>
+                      <Camera className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" size={14} />
+                    </div>
+                  </div>
+
+                  <div className="flex-[1.5] min-w-[300px] grid grid-cols-2 gap-2 space-y-0">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">From Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm text-slate-700"
+                        value={filterStartDate}
+                        onChange={(e) => setFilterStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">To Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm text-slate-700"
+                        value={filterEndDate}
+                        onChange={(e) => setFilterEndDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={resetFilters}
+                    className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-2 font-bold text-xs uppercase tracking-widest"
+                    title="Reset Filters"
+                  >
+                    <RotateCcw size={16} />
+                    <span>Clear</span>
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Showing {filteredClients.length} of {clients.length} Records</p>
+                  </div>
+                  <ClientTable clients={filteredClients} onDelete={handleDeleteClient} onEdit={(c) => {setEditingClient(c); setIsModalOpen(true)}} onPrint={(c) => {setPrintClient(c); setIsPrinting(true)}} onAI={(c) => {setAiClient(c); setIsAIOpen(true)}} onView={handleViewClient} />
+                </div>
               </div>
+            )}
+
+            {activeTab === 'calendar' && (
+              <CalendarTab 
+                clients={clients} 
+                onViewClient={handleViewClient}
+              />
             )}
 
             {activeTab === 'maintenance' && (

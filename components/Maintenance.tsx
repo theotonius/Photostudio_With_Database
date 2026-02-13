@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera } from 'lucide-react';
+import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2 } from 'lucide-react';
 import { Client, StudioProfile } from '../types';
 
 interface MaintenanceProps {
@@ -14,6 +14,11 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState<StudioProfile>(studioProfile);
+  
+  // Password Change State
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [passError, setPassError] = useState('');
 
   const handleProfileChange = (field: keyof StudioProfile, value: string) => {
     setProfileForm({ ...profileForm, [field]: value });
@@ -36,6 +41,42 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
     alert('Studio Profile Updated!');
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError('');
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPassError('Passwords do not match');
+      return;
+    }
+    
+    setIsChangingPass(true);
+    const userStr = localStorage.getItem('photo_studio_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    try {
+      const res = await fetch('api.php?type=auth&action=change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user?.username,
+          oldPassword: passwordForm.oldPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('Password changed successfully!');
+        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        setPassError(data.message || 'Failed to update password');
+      }
+    } catch (err) {
+      setPassError('Connection error');
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
+
   const exportSQL = () => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `studio_backup_${timestamp}.sql`;
@@ -43,6 +84,16 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
     let sqlContent = `-- Photo Studio CMS Database Backup\n`;
     sqlContent += `-- Generated on: ${new Date().toLocaleString()}\n\n`;
     
+    // Users Table
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`users\` (\n`;
+    sqlContent += `  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n`;
+    sqlContent += `  \`username\` varchar(50) NOT NULL UNIQUE,\n`;
+    sqlContent += `  \`email\` varchar(255) NOT NULL UNIQUE,\n`;
+    sqlContent += `  \`password\` varchar(255) NOT NULL,\n`;
+    sqlContent += `  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n`;
+    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
+    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+
     // Settings Table
     sqlContent += `CREATE TABLE IF NOT EXISTS \`studio_settings\` (\n`;
     sqlContent += `  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n`;
@@ -74,7 +125,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
     sqlContent += `  \`package\` varchar(100) DEFAULT NULL,\n`;
     sqlContent += `  \`totalPrice\` decimal(10,2) DEFAULT 0.00,\n`;
     sqlContent += `  \`paidAmount\` decimal(10,2) DEFAULT 0.00,\n`;
-    sqlContent += `  \`dueAmount\` decimal(10,2) DEFAULT 0.00,\n`; // Added dueAmount column
+    sqlContent += `  \`dueAmount\` decimal(10,2) DEFAULT 0.00,\n`;
     sqlContent += `  \`status\` varchar(50) DEFAULT NULL,\n`;
     sqlContent += `  \`notes\` text,\n`;
     sqlContent += `  \`createdAt\` datetime DEFAULT NULL,\n`;
@@ -121,7 +172,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
 
   return (
     <div className="max-w-5xl space-y-12">
-      {/* Hero Banner */}
       <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
         <div className="relative z-10">
           <h3 className="text-3xl font-black mb-3 flex items-center gap-3 tracking-tight">
@@ -136,93 +186,134 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Profile Settings */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <h4 className="font-bold text-slate-800 flex items-center gap-2">
-              <Building size={18} className="text-indigo-600" />
-              Studio Branding & Details
-            </h4>
-          </div>
-          <form onSubmit={saveProfile} className="p-8 space-y-8">
-            <div className="flex flex-col md:flex-row gap-10 items-start">
-              <div className="w-full md:w-44 flex-shrink-0 space-y-3">
-                <div 
-                  onClick={() => logoInputRef.current?.click()}
-                  className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all overflow-hidden relative group"
-                >
-                  {profileForm.logo ? (
-                    <>
-                      <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                        <Camera size={24} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="text-slate-400 mb-2" size={32} />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Studio Logo</span>
-                    </>
-                  )}
+        <div className="lg:col-span-2 space-y-10">
+          {/* Profile Settings */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                <Building size={18} className="text-indigo-600" />
+                Studio Branding & Details
+              </h4>
+            </div>
+            <form onSubmit={saveProfile} className="p-8 space-y-8">
+              <div className="flex flex-col md:flex-row gap-10 items-start">
+                <div className="w-full md:w-44 flex-shrink-0 space-y-3">
+                  <div 
+                    onClick={() => logoInputRef.current?.click()}
+                    className="w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all overflow-hidden relative group"
+                  >
+                    {profileForm.logo ? (
+                      <>
+                        <img src={profileForm.logo} alt="Logo" className="w-full h-full object-contain p-4" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                          <Camera size={24} />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="text-slate-400 mb-2" size={32} />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Studio Logo</span>
+                      </>
+                    )}
+                  </div>
+                  <input type="file" accept="image/*" className="hidden" ref={logoInputRef} onChange={handleLogoUpload} />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase text-center tracking-widest">Preferred: PNG/SVG</p>
                 </div>
-                <input type="file" accept="image/*" className="hidden" ref={logoInputRef} onChange={handleLogoUpload} />
-                <p className="text-[10px] font-bold text-slate-400 uppercase text-center tracking-widest">Preferred: PNG/SVG</p>
-              </div>
 
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Studio Name</label>
-                  <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Currency Symbol</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Studio Name</label>
+                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.name} onChange={e => handleProfileChange('name', e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Currency Symbol</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={profileForm.currency} onChange={e => handleProfileChange('currency', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business Address</label>
+                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.address} onChange={e => handleProfileChange('address', e.target.value)} />
                   </div>
                 </div>
-                <div className="md:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business Address</label>
-                  <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.address} onChange={e => handleProfileChange('address', e.target.value)} />
-                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone</label>
-                <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.phone} onChange={e => handleProfileChange('phone', e.target.value)} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone</label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.phone} onChange={e => handleProfileChange('phone', e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input type="email" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.email} onChange={e => handleProfileChange('email', e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="email" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.email} onChange={e => handleProfileChange('email', e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Website</label>
-                <div className="relative">
-                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.website} onChange={e => handleProfileChange('website', e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tax ID / BIN</label>
-                <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={profileForm.taxNumber} onChange={e => handleProfileChange('taxNumber', e.target.value)} />
-                </div>
-              </div>
-            </div>
 
-            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
-              <Save size={20} /> Save Studio Profile
-            </button>
-          </form>
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-100">
+                <Save size={20} /> Save Studio Profile
+              </button>
+            </form>
+          </div>
+
+          {/* Security / Password Section */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                <Lock size={18} className="text-indigo-600" />
+                Security & Account
+              </h4>
+            </div>
+            <form onSubmit={handlePasswordChange} className="p-8 space-y-6">
+              {passError && <div className="p-4 bg-rose-50 text-rose-600 rounded-xl text-sm font-bold">{passError}</div>}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Current Password</label>
+                  <input 
+                    type="password" 
+                    required
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    value={passwordForm.oldPassword} 
+                    onChange={e => setPasswordForm({...passwordForm, oldPassword: e.target.value})} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">New Password</label>
+                  <input 
+                    type="password" 
+                    required
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    value={passwordForm.newPassword} 
+                    onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Confirm New Password</label>
+                  <input 
+                    type="password" 
+                    required
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    value={passwordForm.confirmPassword} 
+                    onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})} 
+                  />
+                </div>
+              </div>
+              <button 
+                type="submit" 
+                disabled={isChangingPass}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all disabled:opacity-50"
+              >
+                {isChangingPass ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />}
+                Update Password
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Maintenance Tools */}
@@ -233,7 +324,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
                 <ShieldCheck size={18} className="text-indigo-600" />
                 Data Protection
               </h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">Regular backups are crucial for business continuity. Your backups now include your studio settings.</p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">Regular backups are crucial for business continuity. Your backups now include your studio settings and user data.</p>
             </div>
             
             <div className="space-y-3">
@@ -248,7 +339,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3">
                 <AlertTriangle className="text-amber-600 flex-shrink-0" size={20} />
                 <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider leading-relaxed">
-                  Importing data will overwrite your local studio records and cloud settings.
+                  Importing data will overwrite your local records. Use with caution.
                 </p>
               </div>
 

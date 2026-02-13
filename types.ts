@@ -12,6 +12,13 @@ export interface InvoiceItem {
   amount: number;
 }
 
+export interface PaymentRecord {
+  id: string;
+  date: string;
+  amount: number;
+  method: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -23,9 +30,10 @@ export interface Client {
   image?: string;
   package: string;
   items?: InvoiceItem[];
+  payments?: PaymentRecord[];
   totalPrice: number;
   paidAmount: number;
-  dueAmount: number; // New field
+  dueAmount: number;
   status: ShootStatus;
   notes: string;
   createdAt: string;

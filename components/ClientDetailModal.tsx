@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Phone, Mail, Calendar, MapPin, Tag, DollarSign, Clock, FileText, User } from 'lucide-react';
+import { X, Phone, Mail, Calendar, MapPin, Tag, DollarSign, Clock, FileText, User, ReceiptText, ChevronRight } from 'lucide-react';
 import { Client, ShootStatus } from '../types';
 
 interface ClientDetailModalProps {
@@ -11,10 +11,11 @@ interface ClientDetailModalProps {
 
 const ClientDetailModal: React.FC<ClientDetailModalProps> = ({ client, onClose, currency }) => {
   const dueAmount = client.totalPrice - client.paidAmount;
+  const payments = client.payments || [];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300">
         {/* Header with Background Pattern */}
         <div className="relative h-32 bg-indigo-600 overflow-hidden">
           <div className="absolute inset-0 opacity-10">
@@ -26,7 +27,7 @@ const ClientDetailModal: React.FC<ClientDetailModalProps> = ({ client, onClose, 
         </div>
 
         {/* Profile Info Overlay */}
-        <div className="px-8 pb-8 -mt-16 relative">
+        <div className="px-8 pb-8 -mt-16 relative flex-1 overflow-y-auto">
           <div className="flex flex-col md:flex-row items-end gap-6 mb-8">
             <div className="w-32 h-32 rounded-3xl bg-white p-1.5 shadow-xl">
               <div className="w-full h-full rounded-[1.2rem] bg-slate-100 overflow-hidden flex items-center justify-center border border-slate-100">
@@ -55,7 +56,7 @@ const ClientDetailModal: React.FC<ClientDetailModalProps> = ({ client, onClose, 
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Contact & Event Section */}
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2">Contact Details</h4>
                 <div className="space-y-3">
@@ -66,7 +67,7 @@ const ClientDetailModal: React.FC<ClientDetailModalProps> = ({ client, onClose, 
                   {client.email && (
                     <div className="flex items-center gap-3 text-slate-600 font-medium">
                       <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400"><Mail size={16} /></div>
-                      <span>{client.email}</span>
+                      <span className="truncate">{client.email}</span>
                     </div>
                   )}
                 </div>
@@ -87,37 +88,82 @@ const ClientDetailModal: React.FC<ClientDetailModalProps> = ({ client, onClose, 
                   )}
                 </div>
               </div>
+
+              {/* PAYMENT HISTORY SECTION */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2 flex justify-between items-center">
+                  <span>Payment History</span>
+                  <ReceiptText size={12} className="text-slate-300" />
+                </h4>
+                {payments.length > 0 ? (
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                    {payments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((payment) => (
+                      <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-indigo-100 hover:bg-white transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                            <DollarSign size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-slate-800">{currency}{payment.amount.toLocaleString()}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{payment.date} • {payment.method}</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={14} className="text-slate-200 group-hover:text-indigo-400 transition-colors" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No transactions logged</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Financial Summary */}
-            <div className="bg-slate-50 rounded-[2rem] p-6 space-y-6">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-200 pb-2">Financial Summary</h4>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Value</span>
-                  <span className="text-xl font-black text-slate-800">{currency}{client.totalPrice.toLocaleString()}</span>
+            <div className="space-y-6">
+              <div className="bg-slate-900 rounded-[2rem] p-8 text-white space-y-6 shadow-xl shadow-slate-200">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-800 pb-2">Financial Balance</h4>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Value</span>
+                    <span className="text-xl font-black">{currency}{client.totalPrice.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Paid Amount</span>
+                    <span className="text-xl font-black text-emerald-400">{currency}{client.paidAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="pt-6 border-t border-slate-800 flex justify-between items-center">
+                    <span className="text-sm font-black text-rose-400 uppercase tracking-widest">Due Balance</span>
+                    <span className="text-4xl font-black text-rose-500">{currency}{dueAmount.toLocaleString()}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-emerald-600 uppercase tracking-wider">Paid Amount</span>
-                  <span className="text-xl font-black text-emerald-600">{currency}{client.paidAmount.toLocaleString()}</span>
-                </div>
-                <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                  <span className="text-sm font-black text-rose-500 uppercase tracking-widest">Due Balance</span>
-                  <span className="text-2xl font-black text-rose-600">{currency}{dueAmount.toLocaleString()}</span>
-                </div>
+
+                {client.notes && (
+                  <div className="pt-6 border-t border-slate-800">
+                     <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                       <FileText size={12} /> Special Notes
+                     </h5>
+                     <p className="text-xs text-slate-400 italic leading-relaxed">
+                       "{client.notes}"
+                     </p>
+                  </div>
+                )}
               </div>
 
-              {client.notes && (
-                <div className="pt-4 border-t border-slate-200">
-                   <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                     <FileText size={12} /> Special Notes
-                   </h5>
-                   <p className="text-xs text-slate-500 italic leading-relaxed">
-                     "{client.notes}"
-                   </p>
+              <div className="p-6 bg-indigo-50 rounded-[2rem] border border-indigo-100">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3">Service Package</h4>
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm">
+                      <ReceiptText size={20} />
+                   </div>
+                   <div>
+                     <p className="font-black text-slate-800 tracking-tight">{client.package}</p>
+                     <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Package Selected</p>
+                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
