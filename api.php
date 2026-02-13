@@ -2,7 +2,7 @@
 <?php
 // Prevent any HTML error output from breaking JSON parsing
 ob_start(); 
-error_reporting(0); // Set to 0 for production to prevent warnings from leaking into JSON
+error_reporting(0); 
 ini_set('display_errors', 0);
 
 header("Access-Control-Allow-Origin: *");
@@ -39,14 +39,6 @@ try {
         PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-    // Seed default admin if empty
-    $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    if ($userCount == 0) {
-        $hashedDemo = password_hash('password123', PASSWORD_DEFAULT);
-        $seedStmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
-        $seedStmt->execute(['admin', 'admin@example.com', $hashedDemo]);
-    }
-
     $pdo->exec("CREATE TABLE IF NOT EXISTS `studio_settings` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
         `name` varchar(255) NOT NULL,
@@ -79,6 +71,18 @@ try {
         PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `contacts` (
+        `id` varchar(50) NOT NULL,
+        `name` varchar(255) NOT NULL,
+        `phone` varchar(50) NOT NULL,
+        `email` varchar(255) DEFAULT NULL,
+        `address` text,
+        `image` longtext,
+        `notes` text,
+        `createdAt` datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
     if ($type === 'auth') {
         $json = file_get_contents("php://input");
         $data = json_decode($json, true);
@@ -88,19 +92,10 @@ try {
             if (empty($data['username']) || empty($data['password']) || empty($data['email'])) {
                 throw new Exception("All fields are required for signup.");
             }
-
-            $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
-            $check->execute([$data['username'], $data['email']]);
-            if ($check->fetch()) {
-                http_response_code(409);
-                echo json_encode(["status" => "error", "message" => "Username or Email already exists."]);
-                exit();
-            }
-
             $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
             $stmt->execute([$data['username'], $data['email'], $hashedPassword]);
-            echo json_encode(["status" => "success", "message" => "Account created successfully!"]);
+            echo json_encode(["status" => "success"]);
             exit();
         } 
         elseif ($action === 'login') {
@@ -111,7 +106,7 @@ try {
                 echo json_encode(["status" => "success", "user" => ["username" => $user['username'], "email" => $user['email']]]);
             } else {
                 http_response_code(401);
-                echo json_encode(["status" => "error", "message" => "Invalid username or password."]);
+                echo json_encode(["status" => "error", "message" => "Invalid credentials"]);
             }
             exit();
         }
@@ -124,17 +119,39 @@ try {
                 break;
             case 'POST':
                 $data = json_decode(file_get_contents("php://input"), true);
-                $stmt = $pdo->prepare("REPLACE INTO studio_settings (id, name, logo, address, phone, email, website, currency, taxNumber) 
-                                      VALUES (1, :name, :logo, :address, :phone, :email, :website, :currency, :taxNumber)");
-                $stmt->execute([
-                    ':name' => $data['name'], ':logo' => $data['logo'] ?? null, ':address' => $data['address'] ?? '',
-                    ':phone' => $data['phone'] ?? '', ':email' => $data['email'] ?? '', ':website' => $data['website'] ?? '',
-                    ':currency' => $data['currency'] ?? '৳', ':taxNumber' => $data['taxNumber'] ?? ''
-                ]);
+                $stmt = $pdo->prepare("REPLACE INTO studio_settings (id, name, logo, address, phone, email, website, currency, taxNumber) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$data['name'], $data['logo'], $data['address'], $data['phone'], $data['email'], $data['website'], $data['currency'], $data['taxNumber']]);
                 echo json_encode(["status" => "success"]);
                 break;
         }
-    } else {
+    } 
+    elseif ($type === 'contacts') {
+        switch ($method) {
+            case 'GET':
+                $stmt = $pdo->query("SELECT * FROM contacts ORDER BY name ASC");
+                echo json_encode($stmt->fetchAll());
+                break;
+            case 'POST':
+                $data = json_decode(file_get_contents("php://input"), true);
+                $sql = "INSERT INTO contacts (id, name, phone, email, address, image, notes, createdAt) 
+                        VALUES (:id, :name, :phone, :email, :address, :image, :notes, :createdAt)
+                        ON DUPLICATE KEY UPDATE name=:name, phone=:phone, email=:email, address=:address, image=:image, notes=:notes";
+                $pdo->prepare($sql)->execute([
+                    ':id' => $data['id'], ':name' => $data['name'], ':phone' => $data['phone'], ':email' => $data['email'] ?? null,
+                    ':address' => $data['address'] ?? '', ':image' => $data['image'] ?? null, ':notes' => $data['notes'] ?? '',
+                    ':createdAt' => $data['createdAt'] ?? date('Y-m-d H:i:s')
+                ]);
+                echo json_encode(["status" => "success"]);
+                break;
+            case 'DELETE':
+                if (isset($_GET['id'])) {
+                    $pdo->prepare("DELETE FROM contacts WHERE id = ?")->execute([$_GET['id']]);
+                    echo json_encode(["status" => "success"]);
+                }
+                break;
+        }
+    }
+    else {
         switch ($method) {
             case 'GET':
                 $stmt = $pdo->query("SELECT * FROM clients ORDER BY createdAt DESC");
@@ -165,7 +182,7 @@ try {
         }
     }
 } catch (Exception $e) {
-    ob_clean(); // Remove any previous output
+    ob_clean();
     http_response_code(500);
     echo json_encode(["status" => "error", "message" => $e->getMessage()]);
 }

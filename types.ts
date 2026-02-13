@@ -39,6 +39,17 @@ export interface Client {
   createdAt: string;
 }
 
+export interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  image?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface StudioProfile {
   id?: string;
   name: string;

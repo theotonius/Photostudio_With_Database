@@ -1,16 +1,17 @@
 
 import React, { useRef, useState } from 'react';
 import { Database, Download, Upload, ShieldCheck, FileJson, FileCode, AlertTriangle, Building, Save, Globe, Phone, Mail, DollarSign, Hash, Camera, Lock, Loader2 } from 'lucide-react';
-import { Client, StudioProfile } from '../types';
+import { Client, Contact, StudioProfile } from '../types';
 
 interface MaintenanceProps {
   clients: Client[];
+  contacts: Contact[];
   onImport: (clients: Client[]) => void;
   studioProfile: StudioProfile;
   onUpdateProfile: (profile: StudioProfile) => void;
 }
 
-const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProfile, onUpdateProfile }) => {
+const Maintenance: React.FC<MaintenanceProps> = ({ clients, contacts, onImport, studioProfile, onUpdateProfile }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState<StudioProfile>(studioProfile);
@@ -84,6 +85,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
     let sqlContent = `-- Photo Studio CMS Database Backup\n`;
     sqlContent += `-- Generated on: ${new Date().toLocaleString()}\n\n`;
     
+    const escape = (val: any) => val === null || val === undefined ? 'NULL' : `'${String(val).replace(/'/g, "''")}'`;
+
     // Users Table
     sqlContent += `CREATE TABLE IF NOT EXISTS \`users\` (\n`;
     sqlContent += `  \`id\` int(11) NOT NULL AUTO_INCREMENT,\n`;
@@ -108,8 +111,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
     sqlContent += `  PRIMARY KEY (\`id\`)\n`;
     sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
 
-    const escape = (val: any) => val === null || val === undefined ? 'NULL' : `'${String(val).replace(/'/g, "''")}'`;
-    
     sqlContent += `REPLACE INTO \`studio_settings\` VALUES (1, ${escape(studioProfile.name)}, ${escape(studioProfile.logo)}, ${escape(studioProfile.address)}, ${escape(studioProfile.phone)}, ${escape(studioProfile.email)}, ${escape(studioProfile.website)}, ${escape(studioProfile.currency)}, ${escape(studioProfile.taxNumber)});\n\n`;
 
     // Clients Table
@@ -136,6 +137,27 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
       sqlContent += `INSERT INTO \`clients\` VALUES\n`;
       const rows = clients.map(client => {
         return `(${escape(client.id)}, ${escape(client.name)}, ${escape(client.phone)}, ${escape(client.email)}, ${escape(client.eventDate)}, ${escape(client.eventType)}, ${escape(client.location)}, ${escape(client.image)}, ${escape(client.package)}, ${client.totalPrice}, ${client.paidAmount}, ${client.dueAmount || (client.totalPrice - client.paidAmount)}, ${escape(client.status)}, ${escape(client.notes)}, ${escape(client.createdAt)})`;
+      });
+      sqlContent += rows.join(',\n') + ';\n\n';
+    }
+
+    // Contacts Table Export
+    sqlContent += `CREATE TABLE IF NOT EXISTS \`contacts\` (\n`;
+    sqlContent += `  \`id\` varchar(50) NOT NULL,\n`;
+    sqlContent += `  \`name\` varchar(255) NOT NULL,\n`;
+    sqlContent += `  \`phone\` varchar(50) NOT NULL,\n`;
+    sqlContent += `  \`email\` varchar(255) DEFAULT NULL,\n`;
+    sqlContent += `  \`address\` text,\n`;
+    sqlContent += `  \`image\` longtext,\n`;
+    sqlContent += `  \`notes\` text,\n`;
+    sqlContent += `  \`createdAt\` datetime DEFAULT CURRENT_TIMESTAMP,\n`;
+    sqlContent += `  PRIMARY KEY (\`id\`)\n`;
+    sqlContent += `) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n`;
+
+    if (contacts.length > 0) {
+      sqlContent += `INSERT INTO \`contacts\` (\`id\`, \`name\`, \`phone\`, \`email\`, \`address\`, \`image\`, \`notes\`, \`createdAt\`) VALUES\n`;
+      const rows = contacts.map(contact => {
+        return `(${escape(contact.id)}, ${escape(contact.name)}, ${escape(contact.phone)}, ${escape(contact.email)}, ${escape(contact.address)}, ${escape(contact.image)}, ${escape(contact.notes)}, ${escape(contact.createdAt)})`;
       });
       sqlContent += rows.join(',\n') + ';\n';
     }
@@ -324,7 +346,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ clients, onImport, studioProf
                 <ShieldCheck size={18} className="text-indigo-600" />
                 Data Protection
               </h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">Regular backups are crucial for business continuity. Your backups now include your studio settings and user data.</p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">Regular backups are crucial for business continuity. Your backups now include your studio settings, user data, and business contacts.</p>
             </div>
             
             <div className="space-y-3">

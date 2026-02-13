@@ -35,7 +35,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSubmit }) 
     eventType: 'Wedding',
     location: '',
     image: '',
-    package: 'Standard',
+    package: 'Basic',
     items: [],
     payments: [],
     totalPrice: 0,
@@ -43,6 +43,10 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSubmit }) 
     status: ShootStatus.PENDING,
     notes: ''
   });
+
+  const packageOptions = [
+    'Basic', 'Silver', 'Gold', 'Exclusive', 'Combo', 'Honor', 'Honor-2', 'Honor-3'
+  ];
 
   useEffect(() => {
     if (client) {
@@ -54,7 +58,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSubmit }) 
         eventType: client.eventType,
         location: client.location || '',
         image: client.image || '',
-        package: client.package,
+        package: client.package || 'Basic',
         items: client.items || [],
         payments: client.payments || [],
         totalPrice: client.totalPrice,
@@ -332,7 +336,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSubmit }) 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-50">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 uppercase">Event Date</label>
               <input type="date" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.eventDate} onChange={e => setFormData({...formData, eventDate: e.target.value})} />
@@ -341,6 +345,14 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSubmit }) 
               <label className="text-xs font-bold text-slate-500 uppercase">Event Type</label>
               <select className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.eventType} onChange={e => setFormData({...formData, eventType: e.target.value})}>
                 <option>Wedding</option><option>Birthday</option><option>Corporate</option><option>Photoshoot</option><option>Portfolio</option><option>Other</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Service Package</label>
+              <select className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600" value={formData.package} onChange={e => setFormData({...formData, package: e.target.value})}>
+                {packageOptions.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
               </select>
             </div>
              <div className="space-y-1">
