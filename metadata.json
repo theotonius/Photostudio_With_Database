@@ -1,0 +1,5 @@
+{
+  "name": "Photo Studio CMS",
+  "description": "A comprehensive client management system for photo studios to manage client bookings, payments, and generate invoices with AI-powered shoot concept generation.",
+  "requestFramePermissions": []
+}
