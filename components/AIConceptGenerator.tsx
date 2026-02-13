@@ -17,7 +17,8 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
   const generateConcept = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Create a creative photography shoot concept and shot list for a client named ${client.name} for their ${client.eventType} event on ${client.eventDate}. 
       Details: ${client.notes || 'Standard shoot'}. 
       Package: ${client.package}. 
@@ -31,6 +32,7 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
         }
       });
 
+      // Directly access .text property
       setConcept(response.text || 'Could not generate a concept at this time.');
     } catch (error) {
       console.error('Error generating concept:', error);
