@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Users, Camera, DollarSign, Calendar, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save } from 'lucide-react';
+import { Plus, Search, Users, Camera, DollarSign, Calendar, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff } from 'lucide-react';
 import { Client, ShootStatus, DashboardStats } from './types';
 import ClientModal from './components/ClientModal';
 import DashboardCards from './components/DashboardCards';
@@ -8,6 +8,7 @@ import ClientTable from './components/ClientTable';
 import PrintPreview from './components/PrintPreview';
 import AIConceptGenerator from './components/AIConceptGenerator';
 import Login from './components/Login';
+import Maintenance from './components/Maintenance';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -16,28 +17,43 @@ const App: React.FC = () => {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'maintenance'>('dashboard');
   const [isPrinting, setIsPrinting] = useState(false);
   const [printClient, setPrintClient] = useState<Client | null>(null);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [aiClient, setAiClient] = useState<Client | null>(null);
 
-  // ডাটাবেস থেকে ডাটা লোড করা
   const fetchFromDatabase = async () => {
     setIsSyncing(true);
     try {
       const response = await fetch('api.php');
-      if (!response.ok) throw new Error('Network response was not ok');
+      
+      // চেক করা হচ্ছে রেসপন্স টাইপ কি জেসন কি না
+      const contentType = response.headers.get("content-type");
+      if (!response.ok || !contentType || !contentType.includes("application/json")) {
+        throw new Error('Server returned non-JSON response (PHP might not be running)');
+      }
+
       const data = await response.json();
-      setClients(Array.isArray(data) ? data : []);
-      localStorage.setItem('photo_studio_clients', JSON.stringify(data));
+      const clientList = Array.isArray(data) ? data : [];
+      setClients(clientList);
+      localStorage.setItem('photo_studio_clients', JSON.stringify(clientList));
+      setIsOffline(false);
     } catch (error) {
-      console.error("Sync failed, using offline data", error);
+      console.warn("Database sync failed, falling back to local storage:", error);
+      setIsOffline(true);
       const saved = localStorage.getItem('photo_studio_clients');
-      if (saved) setClients(JSON.parse(saved));
+      if (saved) {
+        try {
+          setClients(JSON.parse(saved));
+        } catch (e) {
+          setClients([]);
+        }
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -47,16 +63,20 @@ const App: React.FC = () => {
     fetchFromDatabase();
   }, []);
 
-  // ডাটাবেসে সেভ করার ফাংশন
   const saveToDatabase = async (client: Client) => {
+    if (isOffline) return; // অফলাইন মুডে থাকলে এপিআই কল করার দরকার নেই
+    
     try {
-      await fetch('api.php', {
+      const response = await fetch('api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(client)
       });
+      
+      if (!response.ok) throw new Error('API update failed');
     } catch (error) {
-      console.error("Failed to save to cloud", error);
+      console.error("Failed to save to cloud:", error);
+      setIsOffline(true);
     }
   };
 
@@ -103,12 +123,20 @@ const App: React.FC = () => {
       const updatedClients = clients.filter(c => c.id !== id);
       setClients(updatedClients);
       localStorage.setItem('photo_studio_clients', JSON.stringify(updatedClients));
-      try {
-        await fetch(`api.php?id=${id}`, { method: 'DELETE' });
-      } catch (e) {
-        console.error("Delete from server failed");
+      if (!isOffline) {
+        try {
+          await fetch(`api.php?id=${id}`, { method: 'DELETE' });
+        } catch (e) {
+          console.error("Delete from server failed");
+        }
       }
     }
+  };
+
+  const handleImportClients = async (importedClients: Client[]) => {
+    setClients(importedClients);
+    localStorage.setItem('photo_studio_clients', JSON.stringify(importedClients));
+    alert('Database restored successfully to local storage!');
   };
 
   const handleLogout = () => {
@@ -147,14 +175,24 @@ const App: React.FC = () => {
                 <Users size={20} />
                 <span>Clients</span>
               </button>
+              <button onClick={() => setActiveTab('maintenance')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'maintenance' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}>
+                <Database size={20} />
+                <span>Backup & SQL</span>
+              </button>
               <button onClick={fetchFromDatabase} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-slate-400 hover:text-white hover:bg-slate-800">
                 <CloudSync size={20} className={isSyncing ? 'animate-spin' : ''} />
-                <span>Refresh Data</span>
+                <span>Sync Cloud</span>
               </button>
             </nav>
           </div>
           
           <div className="mt-auto p-6 space-y-3">
+            {isOffline && (
+              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-2 flex items-center gap-2 text-amber-500">
+                <WifiOff size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">Local Only Mode</span>
+              </div>
+            )}
             <button onClick={() => {setEditingClient(null); setIsModalOpen(true)}} className="w-full bg-white text-slate-900 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100 transition-all shadow-lg">
               <Plus size={20} />
               <span>New Booking</span>
@@ -168,22 +206,27 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto pb-12">
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <h2 className="text-2xl font-bold text-slate-800 capitalize">{activeTab === 'dashboard' ? 'Overview' : 'Client Records'}</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold text-slate-800 capitalize">
+                {activeTab === 'dashboard' ? 'Overview' : activeTab === 'clients' ? 'Client Records' : 'Maintenance'}
+              </h2>
+              {isOffline && (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
+                  <WifiOff size={12} /> Offline
+                </span>
+              )}
+            </div>
             
             <div className="flex items-center gap-4 w-full max-w-2xl">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="text" placeholder="Search by name or event..." className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <input type="text" placeholder="Search records..." className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
-              <button onClick={fetchFromDatabase} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-2 px-4">
-                <CloudSync size={18} className={isSyncing ? 'animate-spin' : ''} />
-                <span className="font-medium text-sm">Sync Now</span>
-              </button>
             </div>
           </header>
 
           <div className="p-6 max-w-7xl mx-auto space-y-8">
-            {activeTab === 'dashboard' ? (
+            {activeTab === 'dashboard' && (
               <>
                 <DashboardCards stats={stats} />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -197,24 +240,30 @@ const App: React.FC = () => {
                     </div>
                   </div>
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="font-bold text-slate-800 mb-4">Financial Status</h3>
+                    <h3 className="font-bold text-slate-800 mb-4">Quick Financials</h3>
                     <div className="space-y-4">
                       <div className="p-4 bg-indigo-50 rounded-xl">
-                        <p className="text-sm text-indigo-600 font-medium">Total Billing</p>
+                        <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider mb-1">Total Collections</p>
                         <p className="text-2xl font-bold text-slate-900">৳{stats.totalRevenue.toLocaleString()}</p>
                       </div>
-                      <div className="p-4 bg-amber-50 rounded-xl">
-                        <p className="text-sm text-amber-600 font-medium">Due Balance</p>
+                      <div className="p-4 bg-rose-50 rounded-xl">
+                        <p className="text-xs text-rose-600 font-bold uppercase tracking-wider mb-1">Outstanding</p>
                         <p className="text-2xl font-bold text-slate-900">৳{stats.pendingPayments.toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
                 </div>
               </>
-            ) : (
+            )}
+
+            {activeTab === 'clients' && (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <ClientTable clients={filteredClients} onDelete={handleDeleteClient} onEdit={(c) => {setEditingClient(c); setIsModalOpen(true)}} onPrint={(c) => {setPrintClient(c); setIsPrinting(true)}} onAI={(c) => {setAiClient(c); setIsAIOpen(true)}} />
               </div>
+            )}
+
+            {activeTab === 'maintenance' && (
+              <Maintenance clients={clients} onImport={handleImportClients} />
             )}
           </div>
         </main>
