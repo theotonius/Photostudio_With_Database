@@ -1,7 +1,8 @@
+
 <?php
 ob_start(); // Prevent accidental output
 error_reporting(E_ALL);
-ini_set('display_errors', 0); 
+ini_set('display_errors', 1); // Set to 1 temporarily to debug local errors
 
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
@@ -10,18 +11,13 @@ header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers
 
 try {
     if (!file_exists('db_config.php')) {
-        throw new Exception("db_config.php missing. Please configure your database.");
+        throw new Exception("db_config.php missing. Please ensure this file exists in the same directory.");
     }
 
     require_once 'db_config.php';
 
-    // Simple check if placeholders are still present
-    if (isset($host) && $host === 'localhost' && isset($db_name) && $db_name === 'your_database_name') {
-        throw new Exception("Database credentials not configured in db_config.php");
-    }
-
     if (!isset($pdo)) {
-        throw new Exception("Database connection failed to initialize.");
+        throw new Exception("Database connection variable \$pdo is not defined in db_config.php.");
     }
 
     $method = $_SERVER['REQUEST_METHOD'];

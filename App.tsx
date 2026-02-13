@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw, AlertCircle } from 'lucide-react';
+import { Plus, Search, Users, Camera, DollarSign, Calendar as CalendarIcon, Printer, Trash2, Edit2, Sparkles, X, ChevronRight, LayoutDashboard, UserPlus, LogOut, Database, Download, CloudSync, Save, Settings, ShieldCheck, WifiOff, Filter, RotateCcw, AlertCircle, Info } from 'lucide-react';
 import { Client, ShootStatus, DashboardStats, StudioProfile } from './types';
 import ClientModal from './components/ClientModal';
 import DashboardCards from './components/DashboardCards';
@@ -35,6 +35,7 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [studioProfile, setStudioProfile] = useState<StudioProfile>(DEFAULT_STUDIO);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [envError, setEnvError] = useState<boolean>(false);
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOffline, setIsOffline] = useState(currentUser?.mode === 'demo');
@@ -56,6 +57,19 @@ const App: React.FC = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
+  // Check for environment variables and browser environment issues
+  useEffect(() => {
+    try {
+      // Basic check to prevent app crash if process is missing
+      if (typeof process === 'undefined' || !process.env || !process.env.API_KEY) {
+        console.warn("API_KEY not found in process.env. If running locally on WAMP, ensure you are using a dev server or build tool that supports .env files.");
+        setEnvError(true);
+      }
+    } catch (e) {
+      setEnvError(true);
+    }
+  }, []);
+
   const fetchFromDatabase = async () => {
     setBackendError(null);
     if (currentUser?.mode === 'demo') {
@@ -69,9 +83,10 @@ const App: React.FC = () => {
 
     setIsSyncing(true);
     try {
+      // Using relative path to api.php. Ensure this is served via http://localhost/...
       const clientRes = await fetch('api.php?type=clients');
       if (!clientRes.ok) {
-        const errorData = await clientRes.json();
+        const errorData = await clientRes.json().catch(() => ({ message: `Server error: ${clientRes.status}` }));
         throw new Error(errorData.message || `API error: ${clientRes.status}`);
       }
 
@@ -91,8 +106,8 @@ const App: React.FC = () => {
 
       setIsOffline(false);
     } catch (error: any) {
-      console.warn('Working in Local/Offline Mode:', error.message);
-      setBackendError("Backend server (PHP) not reachable or Database not configured. Running in Local Browser Mode.");
+      console.warn('Backend connection failed:', error.message);
+      setBackendError(`Backend Error: ${error.message}. Please check if WAMP is running and api.php is accessible.`);
       setIsOffline(true);
       const savedClients = localStorage.getItem('photo_studio_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
@@ -302,6 +317,14 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 overflow-y-auto pb-12">
+          {envError && (
+             <div className="bg-amber-100 border-b border-amber-200 px-6 py-3 flex items-center gap-3 text-amber-800 text-sm">
+                <Info size={18} />
+                <p><strong>Config Note:</strong> API_KEY is missing from process.env. AI features will be disabled. 
+                   If using WAMP, open the browser console (F12) to check for errors.</p>
+             </div>
+          )}
+
           {backendError && (
             <div className="bg-rose-500 text-white px-6 py-2 flex items-center justify-between text-xs font-bold animate-in slide-in-from-top duration-300">
               <div className="flex items-center gap-2">

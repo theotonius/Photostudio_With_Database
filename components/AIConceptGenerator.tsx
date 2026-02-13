@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { Client } from '../types';
-import { X, Sparkles, Loader2, Copy, Check } from 'lucide-react';
+import { X, Sparkles, Loader2, Copy, Check, AlertCircle } from 'lucide-react';
 
 interface AIConceptGeneratorProps {
   client: Client;
@@ -13,30 +13,36 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
   const [loading, setLoading] = useState(false);
   const [concept, setConcept] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const generateConcept = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key missing. Please configure it in your environment settings.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Create a creative photography shoot concept and shot list for a client named ${client.name} for their ${client.eventType} event on ${client.eventDate}. 
       Details: ${client.notes || 'Standard shoot'}. 
       Package: ${client.package}. 
-      Please provide a theme name, lighting suggestions, and a 10-point shot list. Be professional and creative.`;
+      Please provide a theme name, lighting suggestions, and a 10-point shot list. Be professional and creative. Output in a clear format.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: {
-          temperature: 0.8,
-        }
       });
 
-      // Directly access .text property
-      setConcept(response.text || 'Could not generate a concept at this time.');
-    } catch (error) {
-      console.error('Error generating concept:', error);
-      setConcept('An error occurred. Please ensure your API key is valid.');
+      if (response && response.text) {
+        setConcept(response.text);
+      } else {
+        throw new Error("Received an empty response from AI.");
+      }
+    } catch (err: any) {
+      console.error('Error generating concept:', err);
+      setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
@@ -64,6 +70,13 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
         </div>
 
         <div className="p-6 overflow-y-auto">
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-600 text-sm font-bold">
+              <AlertCircle size={20} className="flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {!concept ? (
             <div className="text-center py-12 space-y-4">
               <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto text-indigo-600">
@@ -78,7 +91,7 @@ const AIConceptGenerator: React.FC<AIConceptGeneratorProps> = ({ client, onClose
               <button 
                 onClick={generateConcept}
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
                 {loading ? 'Thinking...' : 'Generate Plan'}

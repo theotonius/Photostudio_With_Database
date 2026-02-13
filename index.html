@@ -7,6 +7,14 @@
     <title>Photo Studio Client Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // ব্রাউজারে process.env এরর হ্যান্ডলিং করার জন্য শিম
+      window.process = {
+        env: {
+          API_KEY: '' // এখানে আপনার কি-টি বসাতে পারেন অথবা বিল্ড টুল ব্যবহার করতে পারেন
+        }
+      };
+    </script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
